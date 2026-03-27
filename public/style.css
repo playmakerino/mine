@@ -49,7 +49,7 @@ body{background:var(--bg);color:var(--t);font:13px/1.5 'Inter',-apple-system,sys
 .cache-time{font-size:11px;color:var(--t3);margin-top:1px}
 .badge{padding:2px 8px;border-radius:20px;font-size:11px;font-weight:600;background:var(--s2);color:var(--t2)}
 
-.table-wrap{background:var(--s);border:1px solid var(--b);border-radius:var(--rad);overflow:hidden}
+.table-wrap{background:var(--s);border:1px solid var(--b);border-radius:var(--rad);overflow:hidden;position:relative}
 .table-toolbar{padding:10px 14px;border-bottom:1px solid var(--b)}
 .search-box{width:100%;background:var(--s2);border:1px solid transparent;border-radius:6px;color:var(--t);padding:6px 10px;font:13px/1 inherit;outline:none}
 .search-box::placeholder{color:var(--t3)}
@@ -59,8 +59,8 @@ table{width:100%;border-collapse:collapse;font-size:13px}
 thead th{background:var(--s2);color:var(--t2);font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.4px;padding:10px 12px;text-align:left;white-space:nowrap;cursor:pointer;user-select:none;position:sticky;top:0;z-index:2;border-bottom:1px solid var(--b)}
 thead th:first-child{position:sticky;left:0;z-index:3;background:var(--s2)}
 thead th:hover{color:var(--a)}
-.total-row{background:var(--s2);position:sticky;bottom:0;border-top:2px solid var(--a);z-index:2}
-.total-row td{background:var(--s2)}
+.total-row{position:sticky;bottom:0;z-index:2;box-shadow:0 -2px 0 0 var(--a)}
+.total-row td{background:var(--s)}
 thead th .sort-icon{opacity:0;margin-left:2px;font-size:11px}
 thead th.sorted{color:var(--t)}
 thead th.sorted .sort-icon{opacity:1}
@@ -68,8 +68,8 @@ tbody tr{border-bottom:1px solid var(--b);transition:background .08s}
 tbody tr:last-child{border-bottom:none}
 tbody tr:hover{background:rgba(33,37,41,.03)}
 tbody td{padding:6px 10px;vertical-align:middle}
-tbody td:first-child{position:sticky;left:0;z-index:1;background:inherit}
-tbody tr:hover td:first-child{background:rgba(33,37,41,.03)}
+tbody td:first-child{position:sticky;left:0;z-index:1;background:var(--s)}
+tbody tr:hover td:first-child{background:#f8f9fa}
 .td-name{font-weight:500;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .td-mono{font-family:'SF Mono',ui-monospace,monospace;font-size:13px;color:var(--t2)}
 
@@ -80,7 +80,7 @@ tbody tr:hover td:first-child{background:rgba(33,37,41,.03)}
 .delta-pill.flat{color:var(--t3)}
 
 .thumb,.thumb-placeholder{width:28px;height:28px;border-radius:5px;background:var(--s2)}
-.thumb{object-fit:cover}
+.thumb{object-fit:cover;cursor:pointer}
 .thumb-placeholder{display:flex;align-items:center;justify-content:center;color:var(--t3);font-size:13px}
 
 thead th .th-content{display:flex;align-items:center;gap:4px;white-space:nowrap}
@@ -111,9 +111,11 @@ thead th .th-content{display:flex;align-items:center;gap:4px;white-space:nowrap}
 .fmt-badge.carousel{background:rgba(230,119,0,.08);color:#e67700}
 
 .state-box{padding:40px 16px;text-align:center;color:var(--t3);font-size:13px}
+.show-more-row td{text-align:center;padding:10px}
+.btn-show-more{background:var(--s2);border:1px solid var(--b);border-radius:6px;padding:6px 18px;font:500 12px/1 inherit;color:var(--t2);cursor:pointer;transition:.15s}
+.btn-show-more:hover{background:var(--b);color:var(--t)}
 .loader{display:inline-block;width:20px;height:20px;border:2px solid var(--b);border-top-color:var(--a);border-radius:50%;animation:spin .6s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
-.table-wrap{position:relative}
 .load-overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;z-index:5;background:rgba(241,243,245,.85);backdrop-filter:blur(2px)}
 .load-popup{background:var(--s);border:1px solid var(--b);border-radius:var(--rad);padding:24px 32px;text-align:center;box-shadow:0 4px 16px rgba(0,0,0,.08);min-width:220px}
 .load-popup .loader{margin-bottom:10px}
@@ -136,6 +138,11 @@ thead th .th-content{display:flex;align-items:center;gap:4px;white-space:nowrap}
 .msg.assistant .msg-bubble{background:var(--s2);border-bottom-left-radius:4px}
 .msg-meta{font-size:11px;color:var(--t3);margin-top:3px;padding:0 4px}
 .msg.user .msg-meta{text-align:right}
+.msg-bubble pre{background:rgba(0,0,0,.05);border-radius:6px;padding:8px 10px;overflow-x:auto;margin:4px 0;font-size:12px}
+.msg-bubble code{font-family:'SF Mono',ui-monospace,monospace;font-size:12px;background:rgba(0,0,0,.06);padding:1px 4px;border-radius:3px}
+.msg-bubble pre code{background:none;padding:0}
+.msg-bubble ul{margin:4px 0;padding-left:18px}
+.msg-bubble li{margin:2px 0}
 .typing-indicator{display:flex;gap:4px;align-items:center;padding:10px 14px}
 .typing-dot{width:5px;height:5px;background:var(--t3);border-radius:50%;animation:bounce .8s infinite}
 .typing-dot:nth-child(2){animation-delay:.15s}

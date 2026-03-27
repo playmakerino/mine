@@ -29,11 +29,11 @@
     <div class="nav-label">Dashboard</div>
     <div class="nav-item active" onclick="showPage('ads')">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 3h18v18H3z"/><path d="M3 9h18M3 15h18M9 3v18"/></svg>
-      Ad Performance
+      By Ad Name
     </div>
     <div class="nav-item" onclick="showPage('creatives')">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7z"/><polyline points="14 2 14 8 20 8"/></svg>
-      Creative Performance
+      By Creative ID
     </div>
     <div class="nav-label">Tools</div>
     <div class="nav-item" onclick="showPage('chat')">
@@ -50,7 +50,7 @@
     <div id="page-ads" class="page active">
       <div class="section-header">
         <div>
-          <div class="section-title">Ad Performance</div>
+          <div class="section-title">By Ad Name</div>
           <div class="section-sub" id="adsPeriodLabel">Compared to previous 7 days</div>
           <div class="cache-time" id="adsCachedAt"></div>
         </div>
@@ -78,7 +78,7 @@
     <div id="page-creatives" class="page">
       <div class="section-header">
         <div>
-          <div class="section-title">Creative Performance</div>
+          <div class="section-title">By Creative ID</div>
           <div class="section-sub" id="creativesPeriodLabel">Compared to previous 7 days</div>
           <div class="cache-time" id="creativesCachedAt"></div>
         </div>

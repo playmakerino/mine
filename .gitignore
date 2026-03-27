@@ -4,3 +4,4 @@ node_modules/
 .claude/
 .cache-creatives.json
 .cache-insights.json
+.cache-hd-thumbs.json
