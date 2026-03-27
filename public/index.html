@@ -333,7 +333,7 @@ const state = {
   ads: { current: [], previous: [], period: null },
   creatives: { current: [], previous: [], period: null },
   chatModel: 'claude',
-  chatMessages: [],
+  chatMessages: { claude: [], manus: [] },
   sort: { ads: { key: 'spend', dir: 1 }, creatives: { key: 'spend', dir: 1 } },
   filters: { ads: {}, creatives: {} },
 };
@@ -683,6 +683,15 @@ function metrics(row, prev) {
 function selectModel(model) {
   state.chatModel = model;
   $$('.model-btn').forEach(b => b.classList.toggle('active', b.dataset.model === model));
+  // Re-render chat for selected model
+  const container = $('chatMessages');
+  container.innerHTML = '';
+  const msgs = state.chatMessages[model];
+  if (msgs.length === 0) {
+    appendMsg('assistant', 'Hi! Load your data first, then ask questions like:\n- "Top 5 performing ads"\n- "Which creative is underperforming?"\n- "Why is CTR declining?"', 'AI Assistant');
+  } else {
+    msgs.forEach(m => appendMsg(m.role, m.content));
+  }
 }
 
 async function sendMessage() {
@@ -693,7 +702,7 @@ async function sendMessage() {
   const apiKey = state.chatModel === 'claude' ? state.config.claudeKey : state.config.manusKey;
   if (!apiKey) return toast(`Please enter ${state.chatModel === 'claude' ? 'Anthropic' : 'Manus'} API Key`, 'error');
 
-  state.chatMessages.push({ role: 'user', content: text });
+  state.chatMessages[state.chatModel].push({ role: 'user', content: text });
   appendMsg('user', text);
   input.value = '';
   input.style.height = 'auto';
@@ -715,7 +724,7 @@ async function sendMessage() {
     const res = await fetch('/api/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...(state.config.claudeKey && state.config.claudeKey !== '__SERVER__' ? {'x-claude-key': state.config.claudeKey} : {}), ...(state.config.manusKey && state.config.manusKey !== '__SERVER__' ? {'x-manus-key': state.config.manusKey} : {}) },
-      body: JSON.stringify({ model: state.chatModel, messages: state.chatMessages, context }),
+      body: JSON.stringify({ model: state.chatModel, messages: state.chatMessages[state.chatModel], context }),
     });
 
     if (!res.ok) {
@@ -752,7 +761,7 @@ async function sendMessage() {
         try { const j = JSON.parse(payload); if (j.error) throw new Error(j.error); fullText += j.text || ''; bubble.textContent = fullText; scrollChat(); } catch (e) { if (e.message) { fullText = 'Error: ' + e.message; bubble.textContent = fullText; bubble.style.color = '#dc3545'; } }
       }
     }
-    state.chatMessages.push({ role: 'assistant', content: fullText });
+    state.chatMessages[state.chatModel].push({ role: 'assistant', content: fullText });
   } catch (err) {
     $(typingId)?.remove();
     appendMsg('assistant', 'Error: ' + err.message);
@@ -761,10 +770,11 @@ async function sendMessage() {
   }
 }
 
-function appendMsg(role, text) {
+function appendMsg(role, text, label) {
   const el = document.createElement('div');
   el.className = 'msg ' + role;
-  el.innerHTML = `<div class="msg-bubble">${esc(text)}</div><div class="msg-meta">${role === 'user' ? 'You' : state.chatModel === 'claude' ? 'Claude' : 'Manus'}</div>`;
+  const metaLabel = label || (role === 'user' ? 'You' : state.chatModel === 'claude' ? 'Claude' : 'Manus');
+  el.innerHTML = `<div class="msg-bubble">${esc(text)}</div><div class="msg-meta">${metaLabel}</div>`;
   $('chatMessages').appendChild(el);
   scrollChat();
 }
