@@ -401,10 +401,20 @@ window.addEventListener('DOMContentLoaded', async () => {
     const res = await fetch('/api/config');
     const cfg = await res.json();
     state.serverConfig = cfg;
-    if (cfg.hasMetaToken && !state.config.metaToken) state.config.metaToken = '__SERVER__';
-    if (cfg.hasAdAccountId && !state.config.accountId) state.config.accountId = '__SERVER__';
-    if (cfg.hasClaudeKey && !state.config.claudeKey) state.config.claudeKey = '__SERVER__';
-    if (cfg.hasManusKey && !state.config.manusKey) state.config.manusKey = '__SERVER__';
+    const serverMap = [
+      ['hasMetaToken', 'metaToken', 'cfgMetaToken'],
+      ['hasAdAccountId', 'accountId', 'cfgAccountId'],
+      ['hasClaudeKey', 'claudeKey', 'cfgClaudeKey'],
+      ['hasManusKey', 'manusKey', 'cfgManusKey'],
+    ];
+    serverMap.forEach(([cfgKey, stateKey, inputId]) => {
+      if (cfg[cfgKey]) {
+        if (!state.config[stateKey]) state.config[stateKey] = '__SERVER__';
+        const el = $(inputId);
+        el.placeholder = '\u2713 Configured on server';
+        el.style.borderColor = '#28a745';
+      }
+    });
   } catch {}
   updateStatus();
   if (state.config.accountId) {
