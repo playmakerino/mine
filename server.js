@@ -257,10 +257,46 @@ app.post('/api/chat', async (req, res) => {
   } else if (model === 'manus') {
     const apiKey = req.headers['x-manus-key'] || process.env.MANUS_API_KEY;
     if (!apiKey) return res.status(400).json({ error: 'Missing MANUS_API_KEY' });
-    return res.status(501).json({
-      error: 'Manus API integration coming soon',
-      hint:  'Replace this stub in server.js once the Manus public API is available.',
-    });
+
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+
+    try {
+      const lastMsg = messages[messages.length - 1]?.content || '';
+      const prompt = systemPrompt + '\n\nUser: ' + lastMsg;
+
+      // Create Manus task
+      const taskRes = await axios.post('https://api.manus.ai/v1/tasks', { prompt }, {
+        headers: { 'API_KEY': apiKey, 'Content-Type': 'application/json' },
+      });
+      const taskId = taskRes.data.task_id || taskRes.data.id;
+
+      // Poll for task completion (max 60s)
+      let result = null;
+      for (let i = 0; i < 30; i++) {
+        await new Promise(r => setTimeout(r, 2000));
+        const poll = await axios.get(`https://api.manus.ai/v1/tasks/${taskId}`, {
+          headers: { 'API_KEY': apiKey },
+        });
+        const status = poll.data.status;
+        if (status === 'completed' || status === 'done') {
+          result = poll.data.output || poll.data.result || poll.data.response || JSON.stringify(poll.data);
+          break;
+        } else if (status === 'failed' || status === 'error') {
+          throw new Error(poll.data.error || 'Manus task failed');
+        }
+        res.write(`data: ${JSON.stringify({ text: '' })}\n\n`); // keep connection alive
+      }
+
+      if (!result) throw new Error('Manus task timed out');
+      res.write(`data: ${JSON.stringify({ text: result })}\n\n`);
+      res.write('data: [DONE]\n\n');
+      res.end();
+    } catch (err) {
+      res.write(`data: ${JSON.stringify({ error: err.message })}\n\n`);
+      res.end();
+    }
 
   } else {
     return res.status(400).json({ error: `Unknown model: ${model}` });
