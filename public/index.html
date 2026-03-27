@@ -4,199 +4,45 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Meta Ads Dashboard</title>
-<style>
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
-*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-:root{--bg:#f1f3f5;--s:#fff;--s2:#e9ecef;--b:#ced4da;--a:#212529;--a2:#343a40;--g:#2f9e44;--r:#e03131;--t:#212529;--t2:#495057;--t3:#868e96;--rad:8px}
-html,body{height:100%}
-body{background:var(--bg);color:var(--t);font:11px/1.5 'Inter',-apple-system,system-ui,sans-serif;-webkit-font-smoothing:antialiased}
-::selection{background:rgba(33,37,41,.15)}
-::-webkit-scrollbar{width:5px;height:5px}
-::-webkit-scrollbar-track{background:transparent}
-::-webkit-scrollbar-thumb{background:var(--b);border-radius:5px}
-
-.layout{display:grid;grid-template-columns:220px 1fr;grid-template-rows:56px 1fr;height:100vh;overflow:hidden}
-.topbar{grid-column:1/-1;background:var(--s);border-bottom:1px solid var(--b);display:flex;align-items:center;padding:0 24px;gap:16px;z-index:10}
-.sidebar{background:var(--s);border-right:1px solid var(--b);display:flex;flex-direction:column;overflow-y:auto;padding:16px 12px;gap:2px}
-.main{overflow-y:auto;padding:28px 32px}
-
-.logo{font-size:13px;font-weight:600;letter-spacing:-.3px}
-.logo span{color:var(--a)}
-.topbar-actions{margin-left:auto;display:flex;align-items:center;gap:10px}
-.status-dot{width:7px;height:7px;border-radius:50%;background:var(--t3);flex-shrink:0}
-.status-dot.ok{background:var(--g)}
-.status-dot.err{background:var(--r)}
-.period-select{background:var(--s);border:1px solid var(--b);color:var(--t);border-radius:6px;padding:5px 9px;font:500 11px/1 inherit;cursor:pointer;outline:none}
-.period-select:focus{border-color:var(--a);box-shadow:0 0 0 2px rgba(33,37,41,.12)}
-
-.btn{padding:6px 14px;border-radius:6px;font:500 11px/1 inherit;cursor:pointer;border:none;transition:all .15s}
-.btn-primary{background:var(--a);color:#fff}
-.btn-primary:hover{background:var(--a2)}
-
-.nav-label{padding:4px 12px;font-size:9px;font-weight:600;color:var(--t3);text-transform:uppercase;letter-spacing:.8px;margin-top:16px}
-.nav-label:first-child{margin-top:0}
-.nav-item{display:flex;align-items:center;gap:8px;padding:7px 10px;color:var(--t2);cursor:pointer;border-radius:6px;transition:all .1s;font-size:11px;font-weight:500}
-.nav-item:hover{background:var(--s2);color:var(--t)}
-.nav-item.active{background:rgba(33,37,41,.08);color:var(--a)}
-.nav-item svg{width:15px;height:15px;flex-shrink:0;opacity:.5}
-.nav-item.active svg{opacity:1}
-
-.config-panel{margin-top:auto;background:var(--s2);border-radius:var(--rad);padding:14px}
-.config-panel label{font-size:9px;color:var(--t3);display:block;margin:10px 0 3px;font-weight:600;text-transform:uppercase;letter-spacing:.5px}
-.config-panel label:first-child{margin-top:0}
-.config-panel input{width:100%;background:var(--s);border:1px solid var(--b);border-radius:6px;color:var(--t);padding:7px 10px;font:11px/1 inherit;outline:none}
-.config-panel input:focus{border-color:var(--a);box-shadow:0 0 0 2px rgba(33,37,41,.1)}
-.config-panel .btn{width:100%;margin-top:12px}
-
-.page{display:none}.page.active{display:block}
-
-.section-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px}
-.section-title{font-size:13px;font-weight:600;letter-spacing:-.3px}
-.section-sub{font-size:11px;color:var(--t2);margin-top:2px}
-.cache-time{font-size:9px;color:var(--t3);margin-top:1px}
-.badge{padding:2px 8px;border-radius:20px;font-size:9px;font-weight:600;background:var(--s2);color:var(--t2)}
-
-.table-wrap{background:var(--s);border:1px solid var(--b);border-radius:var(--rad);overflow:hidden}
-.table-toolbar{padding:10px 14px;border-bottom:1px solid var(--b)}
-.search-box{width:100%;background:var(--s2);border:1px solid transparent;border-radius:6px;color:var(--t);padding:6px 10px;font:11px/1 inherit;outline:none}
-.search-box::placeholder{color:var(--t3)}
-.search-box:focus{border-color:var(--a);background:var(--s);box-shadow:0 0 0 2px rgba(33,37,41,.1)}
-.table-scroll{overflow:auto;max-height:calc(100vh - 200px)}
-table{width:100%;border-collapse:collapse;font-size:11px}
-thead th{background:var(--s2);color:var(--t2);font-weight:600;font-size:9px;text-transform:uppercase;letter-spacing:.4px;padding:10px 12px;text-align:left;white-space:nowrap;cursor:pointer;user-select:none;position:sticky;top:0;z-index:2;border-bottom:1px solid var(--b)}
-thead th:first-child{position:sticky;left:0;z-index:3;background:var(--s2)}
-thead th:hover{color:var(--a)}
-thead th .sort-icon{opacity:0;margin-left:2px;font-size:9px}
-thead th.sorted{color:var(--t)}
-thead th.sorted .sort-icon{opacity:1}
-tbody tr{border-bottom:1px solid var(--b);transition:background .08s}
-tbody tr:last-child{border-bottom:none}
-tbody tr:hover{background:rgba(33,37,41,.03)}
-tbody td{padding:6px 10px;vertical-align:middle}
-tbody td:first-child{position:sticky;left:0;z-index:1;background:inherit}
-tbody tr:hover td:first-child{background:rgba(33,37,41,.03)}
-.td-name{font-weight:500;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.td-mono{font-family:'SF Mono',ui-monospace,monospace;font-size:11px;color:var(--t2)}
-
-.delta-cell{display:flex;align-items:center;gap:5px}
-.delta-pill{font-size:9px;font-weight:600;padding:1px 5px;border-radius:4px}
-.delta-pill.up{background:rgba(47,158,68,.08);color:var(--g)}
-.delta-pill.down{background:rgba(224,49,49,.06);color:var(--r)}
-.delta-pill.flat{color:var(--t3)}
-
-.thumb,.thumb-placeholder{width:28px;height:28px;border-radius:5px;background:var(--s2)}
-.thumb{object-fit:cover}
-.thumb-placeholder{display:flex;align-items:center;justify-content:center;color:var(--t3);font-size:11px}
-
-thead th .th-content{display:flex;align-items:center;gap:4px;white-space:nowrap}
-.th-filter-input{background:var(--s);border:1px solid var(--b);border-radius:4px;padding:2px 5px;font:9px/1.2 inherit;color:var(--t);outline:none;width:60px;margin-left:auto}
-.th-filter-input:focus{border-color:var(--a);box-shadow:0 0 0 2px rgba(33,37,41,.08)}
-.th-filter-select{background:var(--s);border:1px solid var(--b);border-radius:4px;padding:2px 5px;font:9px/1.2 inherit;color:var(--t);outline:none;cursor:pointer;margin-left:auto}
-.th-filter-select:focus{border-color:var(--a)}
-.col-filter-btn{display:inline-flex;align-items:center;justify-content:center;background:none;border:none;padding:1px 3px;color:var(--t3);cursor:pointer;transition:.12s;margin-left:auto;flex-shrink:0}
-.col-filter-btn:hover{color:var(--t2)}
-.col-filter-btn.active{color:var(--a)}
-.col-filter-btn svg{width:10px;height:10px}
-.filter-popup{position:fixed;background:var(--s);border:1px solid var(--b);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.12);z-index:100;min-width:260px;display:none}
-.filter-popup-title{padding:12px 14px 8px;font-size:11px;font-weight:600;color:var(--t);border-bottom:1px solid var(--b)}
-.filter-popup-body{padding:12px 14px;display:flex;flex-direction:column;gap:8px}
-.filter-popup-body select{width:100%;background:var(--s2);border:1px solid var(--b);border-radius:6px;padding:6px 10px;font:11px/1.3 inherit;color:var(--t);outline:none;cursor:pointer}
-.filter-popup-body select:focus{border-color:var(--a)}
-.filter-inputs{display:flex;align-items:center;gap:6px}
-.filter-inputs input{flex:1;background:var(--s2);border:1px solid var(--b);border-radius:6px;padding:6px 10px;font:11px/1 inherit;color:var(--t);outline:none}
-.filter-inputs input:focus{border-color:var(--a);box-shadow:0 0 0 2px rgba(33,37,41,.08)}
-.filter-popup-actions{padding:8px 14px 12px;display:flex;justify-content:flex-end;gap:6px;border-top:1px solid var(--b)}
-.filter-popup-actions button{padding:5px 14px;border-radius:6px;font:500 11px/1 inherit;cursor:pointer;border:1px solid var(--b);background:var(--s);color:var(--t2);transition:.12s}
-.filter-popup-actions button:hover{border-color:var(--t3);color:var(--t)}
-.filter-popup-actions .btn-primary{border-color:var(--a)}
-
-.fmt-badge{font-size:9px;font-weight:600;padding:2px 6px;border-radius:4px;white-space:nowrap}
-.fmt-badge.image{background:rgba(33,37,41,.08);color:var(--a)}
-.fmt-badge.video{background:rgba(121,80,242,.08);color:#7950f2}
-.fmt-badge.carousel{background:rgba(230,119,0,.08);color:#e67700}
-
-.state-box{padding:40px 16px;text-align:center;color:var(--t3);font-size:11px}
-.loader{display:inline-block;width:20px;height:20px;border:2px solid var(--b);border-top-color:var(--a);border-radius:50%;animation:spin .6s linear infinite}
-@keyframes spin{to{transform:rotate(360deg)}}
-
-#toast{position:fixed;bottom:20px;right:20px;background:var(--s);border:1px solid var(--b);color:var(--t);padding:8px 14px;border-radius:var(--rad);font:500 11px/1 inherit;z-index:9999;opacity:0;transform:translateY(8px);transition:.2s;pointer-events:none;box-shadow:0 4px 12px rgba(0,0,0,.08)}
-#toast.show{opacity:1;transform:translateY(0)}
-#toast.error{border-left:3px solid var(--r)}
-#toast.success{border-left:3px solid var(--g)}
-
-.chat-layout{display:grid;grid-template-columns:1fr 240px;gap:16px;height:calc(100vh - 56px - 76px)}
-.chat-panel{background:var(--s);border:1px solid var(--b);border-radius:var(--rad);display:flex;flex-direction:column;overflow:hidden}
-.chat-header{padding:12px 16px;border-bottom:1px solid var(--b);display:flex;align-items:center;gap:10px}
-.model-selector{display:flex;gap:4px;margin-left:auto}
-.model-btn{padding:4px 10px;border-radius:6px;font:600 9px/1 inherit;cursor:pointer;border:1px solid var(--b);background:var(--s);color:var(--t2);transition:.12s}
-.model-btn:hover{border-color:var(--t3);color:var(--t)}
-.model-btn.active[data-model="claude"]{background:rgba(33,37,41,.08);border-color:var(--a);color:var(--a)}
-.model-btn.active[data-model="manus"]{background:rgba(121,80,242,.08);border-color:#7950f2;color:#7950f2}
-.chat-messages{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:12px}
-.msg{max-width:85%}
-.msg.user{align-self:flex-end}
-.msg.assistant{align-self:flex-start}
-.msg-bubble{padding:8px 12px;border-radius:10px;line-height:1.6;white-space:pre-wrap;word-break:break-word;font-size:11px}
-.msg.user .msg-bubble{background:var(--a);color:#fff;border-bottom-right-radius:4px}
-.msg.assistant .msg-bubble{background:var(--s2);border-bottom-left-radius:4px}
-.msg-meta{font-size:9px;color:var(--t3);margin-top:3px;padding:0 4px}
-.msg.user .msg-meta{text-align:right}
-.typing-indicator{display:flex;gap:4px;align-items:center;padding:10px 14px}
-.typing-dot{width:5px;height:5px;background:var(--t3);border-radius:50%;animation:bounce .8s infinite}
-.typing-dot:nth-child(2){animation-delay:.15s}
-.typing-dot:nth-child(3){animation-delay:.3s}
-@keyframes bounce{0%,80%,100%{transform:translateY(0)}40%{transform:translateY(-5px)}}
-.chat-input-area{padding:12px;border-top:1px solid var(--b);display:flex;gap:8px;align-items:flex-end}
-.chat-textarea{flex:1;background:var(--s2);border:1px solid transparent;border-radius:8px;color:var(--t);padding:7px 10px;font:11px/1.5 inherit;resize:none;min-height:38px;max-height:120px;outline:none}
-.chat-textarea:focus{border-color:var(--a);background:var(--s);box-shadow:0 0 0 2px rgba(33,37,41,.1)}
-.send-btn{width:36px;height:36px;border-radius:8px;background:var(--a);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:.12s}
-.send-btn:hover{background:var(--a2)}
-.send-btn:disabled{background:var(--b);cursor:default}
-.context-panel{background:var(--s);border:1px solid var(--b);border-radius:var(--rad);padding:16px;overflow-y:auto}
-.context-panel h3{font-size:11px;font-weight:600;color:var(--t3);text-transform:uppercase;letter-spacing:.5px;margin-bottom:14px;padding-bottom:10px;border-bottom:1px solid var(--b)}
-.ctx-toggle{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;font-size:11px}
-.toggle{position:relative;width:34px;height:18px}
-.toggle input{opacity:0;width:0;height:0}
-.toggle-slider{position:absolute;inset:0;background:var(--b);border-radius:99px;cursor:pointer;transition:.2s}
-.toggle input:checked+.toggle-slider{background:var(--a)}
-.toggle-slider::before{content:'';position:absolute;width:12px;height:12px;left:3px;top:3px;background:#fff;border-radius:50%;transition:.2s}
-.toggle input:checked+.toggle-slider::before{transform:translateX(16px)}
-</style>
+<link rel="stylesheet" href="style.css">
 </head>
 <body>
 <div class="layout">
   <header class="topbar">
     <div class="logo">Meta<span>Ads</span></div>
     <div id="apiStatus" class="status-dot"></div>
-    <span id="apiStatusText" style="font-size:12px;color:var(--t2)"></span>
+    <span id="apiStatusText" style="font-size:13px;color:var(--t2)"></span>
     <div class="topbar-actions">
       <select class="period-select" id="periodSelect">
         <option value="7">7 days</option>
         <option value="14">14 days</option>
         <option value="30">30 days</option>
       </select>
-      <button class="btn btn-primary" onclick="fetchAll()">Load Data</button>
+      <div class="tooltip-wrap">
+        <button class="btn btn-primary" onclick="fetchAll()">Load Data</button>
+        <div class="tooltip-box">Fetches fresh data from Meta API. Frequent use may trigger rate limits — wait a few minutes between loads.</div>
+      </div>
     </div>
   </header>
 
   <aside class="sidebar">
     <div class="nav-label">Dashboard</div>
     <div class="nav-item active" onclick="showPage('ads')">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg>
-      Ad Name
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M3 3h18v18H3z"/><path d="M3 9h18M3 15h18M9 3v18"/></svg>
+      Ad Performance
     </div>
     <div class="nav-item" onclick="showPage('creatives')">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="3" x2="9" y2="21"/><line x1="15" y1="3" x2="15" y2="21"/><line x1="3" y1="12" x2="21" y2="12"/></svg>
-      Creative ID
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7z"/><polyline points="14 2 14 8 20 8"/></svg>
+      Creative Performance
     </div>
     <div class="nav-label">Tools</div>
     <div class="nav-item" onclick="showPage('chat')">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 2a9 9 0 0 1 9 9c0 4.97-4.03 9-9 9a8.96 8.96 0 0 1-4.57-1.24L3 20l1.24-4.43A8.96 8.96 0 0 1 3 11a9 9 0 0 1 9-9z"/><circle cx="8" cy="11" r=".5" fill="currentColor"/><circle cx="12" cy="11" r=".5" fill="currentColor"/><circle cx="16" cy="11" r=".5" fill="currentColor"/></svg>
       AI Chat
     </div>
     <div class="config-panel" id="configStatus">
-      <label style="margin-bottom:8px;font-size:10px">Server Configuration</label>
-      <div id="cfgStatusList" style="font-size:11px;line-height:2"></div>
+      <label style="margin-bottom:8px;font-size:11px">Server Configuration</label>
+      <div id="cfgStatusList" style="font-size:13px;line-height:2"></div>
     </div>
   </aside>
 
@@ -213,8 +59,8 @@ thead th .th-content{display:flex;align-items:center;gap:4px;white-space:nowrap}
       <div class="table-wrap">
         <div class="table-scroll">
           <table id="adsTable"><thead><tr>
-            <th></th>
-            <th data-sort="ad_name" onclick="sortTable('ads','ad_name')"><div class="th-content">Name <span class="sort-icon">&#x25B4;&#x25BE;</span><input data-table="ads" data-col="ad_name" data-type="text" class="th-filter-input" placeholder="Filter..." oninput="filterTable('ads')" onclick="event.stopPropagation()"></div></th>
+            <th>Thumb</th>
+            <th><div class="th-content"><input data-table="ads" data-col="ad_name" data-type="text" class="th-filter-input" placeholder="Ad Name" oninput="filterTable('ads')" onclick="event.stopPropagation()"></div></th>
             <th data-sort="spend" onclick="sortTable('ads','spend')"><div class="th-content">Spend <span class="sort-icon">&#x25B4;&#x25BE;</span><button class="col-filter-btn" data-table="ads" data-col="spend" onclick="event.stopPropagation();openFilterPopup('ads','spend',this)"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M1.5 1.5h13L9 8v5l-2 1.5V8z"/></svg></button></div></th>
             <th data-sort="roas" onclick="sortTable('ads','roas')"><div class="th-content">ROAS <span class="sort-icon">&#x25B4;&#x25BE;</span><button class="col-filter-btn" data-table="ads" data-col="roas" onclick="event.stopPropagation();openFilterPopup('ads','roas',this)"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M1.5 1.5h13L9 8v5l-2 1.5V8z"/></svg></button></div></th>
             <th data-sort="cpr" onclick="sortTable('ads','cpr')"><div class="th-content">CPR <span class="sort-icon">&#x25B4;&#x25BE;</span><button class="col-filter-btn" data-table="ads" data-col="cpr" onclick="event.stopPropagation();openFilterPopup('ads','cpr',this)"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M1.5 1.5h13L9 8v5l-2 1.5V8z"/></svg></button></div></th>
@@ -241,10 +87,10 @@ thead th .th-content{display:flex;align-items:center;gap:4px;white-space:nowrap}
       <div class="table-wrap">
         <div class="table-scroll">
           <table id="creativesTable"><thead><tr>
-            <th></th>
-            <th data-sort="creative_id" onclick="sortTable('creatives','creative_id')"><div class="th-content">ID <span class="sort-icon">&#x25B4;&#x25BE;</span><input data-table="creatives" data-col="creative_id" data-type="text" class="th-filter-input" placeholder="Filter..." oninput="filterTable('creatives')" onclick="event.stopPropagation()"></div></th>
-            <th><div class="th-content">Format <select data-table="creatives" data-col="format" data-type="select" class="th-filter-select" onchange="filterTable('creatives')" onclick="event.stopPropagation()"><option value="">All</option><option value="Video">Video</option><option value="Image">Image</option><option value="Carousel">Carousel</option></select></div></th>
-            <th data-sort="ad_name" onclick="sortTable('creatives','ad_name')"><div class="th-content">Ad Name <span class="sort-icon">&#x25B4;&#x25BE;</span><input data-table="creatives" data-col="ad_name" data-type="text" class="th-filter-input" placeholder="Filter..." oninput="filterTable('creatives')" onclick="event.stopPropagation()"></div></th>
+            <th>Thumb</th>
+            <th><div class="th-content">Primary Text</div></th>
+            <th style="width:70px"><div class="th-content"><select data-table="creatives" data-col="format" data-type="select" class="th-filter-select" onchange="filterTable('creatives')" onclick="event.stopPropagation()"><option value="">Format</option><option value="Video">Video</option><option value="Image">Image</option><option value="Carousel">Carousel</option></select></div></th>
+            <th><div class="th-content"><input data-table="creatives" data-col="ad_name" data-type="text" class="th-filter-input" placeholder="Ad Name" oninput="filterTable('creatives')" onclick="event.stopPropagation()"></div></th>
             <th data-sort="spend" onclick="sortTable('creatives','spend')"><div class="th-content">Spend <span class="sort-icon">&#x25B4;&#x25BE;</span><button class="col-filter-btn" data-table="creatives" data-col="spend" onclick="event.stopPropagation();openFilterPopup('creatives','spend',this)"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M1.5 1.5h13L9 8v5l-2 1.5V8z"/></svg></button></div></th>
             <th data-sort="roas" onclick="sortTable('creatives','roas')"><div class="th-content">ROAS <span class="sort-icon">&#x25B4;&#x25BE;</span><button class="col-filter-btn" data-table="creatives" data-col="roas" onclick="event.stopPropagation();openFilterPopup('creatives','roas',this)"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M1.5 1.5h13L9 8v5l-2 1.5V8z"/></svg></button></div></th>
             <th data-sort="cpr" onclick="sortTable('creatives','cpr')"><div class="th-content">CPR <span class="sort-icon">&#x25B4;&#x25BE;</span><button class="col-filter-btn" data-table="creatives" data-col="cpr" onclick="event.stopPropagation();openFilterPopup('creatives','cpr',this)"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M1.5 1.5h13L9 8v5l-2 1.5V8z"/></svg></button></div></th>
@@ -267,19 +113,9 @@ thead th .th-content{display:flex;align-items:center;gap:4px;white-space:nowrap}
         <div class="chat-panel">
           <div class="chat-header">
             <span style="font-weight:500">Data Analysis</span>
-            <div class="model-selector">
-              <button class="model-btn active" data-model="claude" onclick="selectModel('claude')">Claude</button>
-              <button class="model-btn" data-model="manus" onclick="selectModel('manus')">Manus</button>
-            </div>
+            <span style="font-size:13px;color:var(--t3);margin-left:auto">Claude Sonnet 4.5</span>
           </div>
           <div class="chat-messages" id="chatMessages">
-            <div class="msg assistant">
-              <div class="msg-bubble">Hi! Load your data first, then ask questions like:
-- "Top 5 performing ads"
-- "Which creative is underperforming?"
-- "Why is CTR declining?"</div>
-              <div class="msg-meta">AI Assistant</div>
-            </div>
           </div>
           <div class="chat-input-area">
             <textarea class="chat-textarea" id="chatInput" placeholder="Ask about your ad data..." rows="1"
@@ -292,10 +128,7 @@ thead th .th-content{display:flex;align-items:center;gap:4px;white-space:nowrap}
         </div>
         <div class="context-panel">
           <h3>Context</h3>
-          <div class="ctx-toggle"><span>Include Ads</span><label class="toggle"><input type="checkbox" id="ctxAds" checked><span class="toggle-slider"></span></label></div>
-          <div class="ctx-toggle"><span>Include Creatives</span><label class="toggle"><input type="checkbox" id="ctxCreatives" checked><span class="toggle-slider"></span></label></div>
-          <div style="height:1px;background:var(--b);margin:14px 0"></div>
-          <div id="ctxSummary" style="font-size:12px;color:var(--t2)">No data loaded yet.</div>
+          <div id="ctxSummary" style="font-size:13px;color:var(--t2)">No data loaded yet.</div>
         </div>
       </div>
     </div>
@@ -324,477 +157,6 @@ thead th .th-content{display:flex;align-items:center;gap:4px;white-space:nowrap}
   </div>
 </div>
 
-<script>
-const $ = id => document.getElementById(id);
-const $$ = sel => document.querySelectorAll(sel);
-
-const state = {
-  config: Object.fromEntries(['metaToken','accountId','claudeKey','manusKey'].map(k => [k, localStorage.getItem(k) || ''])),
-  ads: { current: [], previous: [], period: null },
-  creatives: { current: [], previous: [], period: null },
-  chatModel: 'claude',
-  chatMessages: { claude: [], manus: [] },
-  sort: { ads: { key: 'spend', dir: 1 }, creatives: { key: 'spend', dir: 1 } },
-  filters: { ads: {}, creatives: {} },
-};
-
-// Table config
-const METRIC_COLS = ['spend','roas','cpr','aov','cpm','ctr','cpc'];
-const TABLES = {
-  ads: {
-    cols: 9, idKey: 'ad_name', searchCols: [1],
-    columns: [
-      null,
-      { key: 'ad_name', type: 'text' },
-      { key: 'spend', type: 'metric' },
-      { key: 'roas', type: 'metric' },
-      { key: 'cpr', type: 'metric' },
-      { key: 'aov', type: 'metric' },
-      { key: 'cpm', type: 'metric' },
-      { key: 'ctr', type: 'metric' },
-      { key: 'cpc', type: 'metric' },
-    ],
-    row: (r, p) => `<tr><td>${thumb(r.thumbnail_url)}</td><td class="td-name" title="${esc(r.ad_name)}">${esc(r.ad_name)}</td>${metrics(r, p)}</tr>`
-  },
-  creatives: {
-    cols: 11, idKey: 'creative_id', searchCols: [1, 2, 3],
-    columns: [
-      null,
-      { key: 'creative_id', type: 'text' },
-      { key: 'format', type: 'select' },
-      { key: 'ad_name', type: 'text' },
-      { key: 'spend', type: 'metric' },
-      { key: 'roas', type: 'metric' },
-      { key: 'cpr', type: 'metric' },
-      { key: 'aov', type: 'metric' },
-      { key: 'cpm', type: 'metric' },
-      { key: 'ctr', type: 'metric' },
-      { key: 'cpc', type: 'metric' },
-    ],
-    row: (r, p) => {
-      const f = r.format?.toLowerCase();
-      return `<tr><td>${thumb(r.thumbnail_url,'🎨')}</td><td class="td-mono">${esc(r.creative_id)}</td><td>${f ? `<span class="fmt-badge ${f}">${esc(r.format)}</span>` : ''}</td><td class="td-name" title="${esc(r.ad_name)}">${esc(r.ad_name)}</td>${metrics(r, p)}</tr>`;
-    }
-  }
-};
-
-// Cache
-const cacheKey = (t, d) => `meta_cache_${state.config.accountId}_${t}_${d}`;
-const saveCache = (t, d, v) => { try { localStorage.setItem(cacheKey(t, d), JSON.stringify(v)); } catch {} };
-const loadCache = (t, d) => { try { return JSON.parse(localStorage.getItem(cacheKey(t, d))); } catch { return null; } };
-
-// Init
-window.addEventListener('DOMContentLoaded', async () => {
-  // Fetch server-side config and show status
-  try {
-    const res = await fetch('/api/config');
-    const cfg = await res.json();
-    state.serverConfig = cfg;
-    if (cfg.hasMetaToken) state.config.metaToken = '__SERVER__';
-    if (cfg.hasAdAccountId) state.config.accountId = '__SERVER__';
-    if (cfg.hasClaudeKey) state.config.claudeKey = '__SERVER__';
-    if (cfg.hasManusKey) state.config.manusKey = '__SERVER__';
-    const items = [
-      ['Meta Token', cfg.hasMetaToken],
-      ['Account ID', cfg.hasAdAccountId],
-      ['Anthropic Key', cfg.hasClaudeKey],
-      ['Manus Key', cfg.hasManusKey],
-    ];
-    $('cfgStatusList').innerHTML = items.map(([name, ok]) =>
-      `<div style="color:${ok ? '#28a745' : '#6c757d'}">${ok ? '\u2713' : '\u2717'} ${name}</div>`
-    ).join('');
-  } catch {}
-  updateStatus();
-  if (state.config.accountId) {
-    const days = $('periodSelect').value;
-    for (const type of ['ads', 'creatives']) {
-      const cached = loadCache(type, days);
-      if (cached) { state[type] = cached; renderTable(type); showCacheTime(type, cached.cached_at); }
-    }
-    updateCtxSummary();
-  }
-});
-
-
-function updateStatus() {
-  const ok = !!(state.config.metaToken && state.config.accountId);
-  $('apiStatus').className = 'status-dot ' + (ok ? 'ok' : 'err');
-  $('apiStatusText').textContent = ok ? 'Connected' : 'Not configured';
-}
-
-function showCacheTime(type, iso) {
-  const el = $(type + 'CachedAt');
-  if (!el || !iso) { if (el) el.textContent = ''; return; }
-  const d = new Date(iso);
-  el.textContent = `Updated ${d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })} ${d.toLocaleDateString('en-US')}`;
-}
-
-// Navigation
-function showPage(name) {
-  $$('.page').forEach(p => p.classList.remove('active'));
-  $$('.nav-item').forEach(n => n.classList.remove('active'));
-  $('page-' + name).classList.add('active');
-  event?.currentTarget?.classList.add('active');
-}
-
-// Fetch
-async function fetchAll() {
-  if (!state.config.metaToken || !state.config.accountId)
-    return toast('Please enter Meta Token and Account ID first', 'error');
-
-  const days = $('periodSelect').value;
-  const headers = {};
-  if (state.config.metaToken && state.config.metaToken !== '__SERVER__') headers['x-meta-token'] = state.config.metaToken;
-  if (state.config.accountId && state.config.accountId !== '__SERVER__') headers['x-meta-account-id'] = state.config.accountId;
-
-  for (const t of ['ads', 'creatives']) $(t + 'Body').innerHTML = `<tr><td colspan="${TABLES[t].cols}"><div class="state-box"><div class="loader"></div></div></td></tr>`;
-
-  try {
-    const [adsRes, crRes] = await Promise.all([
-      fetch(`/api/ads?days=${days}`, { headers }).then(r => r.json()),
-      fetch(`/api/creatives?days=${days}`, { headers }).then(r => r.json()).catch(() => null),
-    ]);
-
-    if (adsRes.error) throw new Error(adsRes.error + ': ' + JSON.stringify(adsRes.detail));
-    state.ads = adsRes;
-    saveCache('ads', days, adsRes);
-    renderTable('ads');
-    showCacheTime('ads', adsRes.cached_at);
-
-    if (crRes && !crRes.error) {
-      state.creatives = crRes;
-      saveCache('creatives', days, crRes);
-      renderTable('creatives');
-      showCacheTime('creatives', crRes.cached_at);
-    } else {
-      $('creativesBody').innerHTML = empty(TABLES.creatives.cols);
-      if (crRes?.error) toast('Creatives: ' + crRes.error, 'error');
-    }
-
-    updateCtxSummary();
-    const crMsg = crRes && !crRes.error ? ` and ${crRes.current.length} creatives` : '';
-    toast(`Loaded ${adsRes.current.length} ads${crMsg}`, 'success');
-  } catch (err) {
-    toast('Error: ' + err.message, 'error');
-    for (const t of ['ads', 'creatives']) $(t + 'Body').innerHTML = empty(TABLES[t].cols);
-  }
-}
-
-// Data helpers
-function enrichRow(row) {
-  const findAction = (arr, type) => (arr || []).find(x => x.action_type === type || x.action_type === 'omni_' + type);
-  const pc = row.purchase_count ?? parseFloat(findAction(row.actions, 'purchase')?.value || 0);
-  const pv = row.purchase_value ?? parseFloat(findAction(row.action_values, 'purchase')?.value || 0);
-  const roas = row.purchase_roas ? parseFloat(Array.isArray(row.purchase_roas) ? (row.purchase_roas[0]?.value || 0) : row.purchase_roas) : 0;
-  return { ...row, roas, cpr: pc ? parseFloat(row.spend || 0) / pc : 0, aov: pc && pv ? pv / pc : 0 };
-}
-
-// Render
-function renderTable(type) {
-  const cfg = TABLES[type];
-  const data = state[type];
-  const prevMap = {};
-  data.previous.map(enrichRow).forEach(r => prevMap[r[cfg.idKey]] = r);
-  const { key, dir } = state.sort[type];
-  const sorted = data.current.map(enrichRow).sort((a, b) => (parseFloat(b[key] || 0) - parseFloat(a[key] || 0)) * dir);
-
-  // Store enriched data for filtering
-  state[type]._enriched = sorted;
-
-  $(type + 'Count').textContent = sorted.length + ' ' + type;
-  if (data.period) $(type + 'PeriodLabel').textContent = `${data.period.current.since} - ${data.period.current.until} vs ${data.period.previous.since} - ${data.period.previous.until}`;
-
-  $(type + 'Body').innerHTML = sorted.map(r => cfg.row(r, prevMap[r[cfg.idKey]] || {})).join('') || empty(cfg.cols);
-
-  $$(`#${type}Table thead th`).forEach(th => {
-    th.classList.toggle('sorted', th.dataset.sort === key);
-  });
-  filterTable(type);
-}
-
-function sortTable(type, key) {
-  const s = state.sort[type];
-  s.dir = s.key === key ? s.dir * -1 : 1;
-  s.key = key;
-  renderTable(type);
-}
-
-function filterTable(type) {
-  const enriched = state[type]._enriched || [];
-  const metricFilters = state.filters[type];
-
-  // Collect text/select filters from header row
-  const colFilters = {};
-  $$(`#${type}Table thead [data-col]`).forEach(el => {
-    const col = el.dataset.col;
-    const t = el.dataset.type;
-    const v = el.value.trim();
-    if (v && !(t === 'select' && v === '')) colFilters[col] = { type: t, value: v };
-  });
-
-  $$(`#${type}Body tr`).forEach((tr, idx) => {
-    const row = enriched[idx];
-    if (!row) return;
-    let show = true;
-
-    // 1. Text/select column filters
-    for (const [col, f] of Object.entries(colFilters)) {
-      if (f.type === 'text') {
-        if (!String(row[col] || '').toLowerCase().includes(f.value.toLowerCase())) { show = false; break; }
-      } else if (f.type === 'select') {
-        if (f.value && String(row[col] || '') !== f.value) { show = false; break; }
-      }
-    }
-
-    // 2. Metric popup filters
-    if (show) {
-      for (const [col, f] of Object.entries(metricFilters)) {
-        const v = parseFloat(row[col] || 0);
-        if (f.op === 'gt' && !(v > f.val1)) { show = false; break; }
-        if (f.op === 'lt' && !(v < f.val1)) { show = false; break; }
-        if (f.op === 'between' && !(v >= f.val1 && v <= f.val2)) { show = false; break; }
-        if (f.op === 'notBetween' && !(v < f.val1 || v > f.val2)) { show = false; break; }
-      }
-    }
-
-    tr.style.display = show ? '' : 'none';
-  });
-
-  // Update visible count
-  const visible = $$(`#${type}Body tr`).length ? [...$$(`#${type}Body tr`)].filter(tr => tr.style.display !== 'none').length : 0;
-  const total = enriched.length;
-  $(type + 'Count').textContent = visible < total ? `${visible}/${total} ${type}` : `${total} ${type}`;
-}
-
-// ── Filter Popup ──────────────────────────────────────────────────────────────
-let _fpState = { type: null, col: null, btn: null };
-
-function openFilterPopup(type, col, btn) {
-  const popup = $('filterPopup');
-  _fpState = { type, col, btn };
-
-  // Load existing filter
-  const existing = state.filters[type][col];
-  $('filterOp').value = existing?.op || 'gt';
-  $('filterVal1').value = existing?.val1 ?? '';
-  $('filterVal2').value = existing?.val2 ?? '';
-  $('filterPopupTitle').textContent = col.toUpperCase() + ' Filter';
-  onFilterOpChange();
-
-  // Position popup near button, ensure it stays in viewport
-  const rect = btn.getBoundingClientRect();
-  popup.style.display = 'block';
-  const popH = popup.offsetHeight;
-  const popW = popup.offsetWidth;
-  const top = rect.bottom + 4 + popH > window.innerHeight ? rect.top - popH - 4 : rect.bottom + 4;
-  popup.style.top = Math.max(4, top) + 'px';
-  popup.style.left = Math.min(rect.left, window.innerWidth - popW - 8) + 'px';
-
-  // Close on outside click
-  setTimeout(() => document.addEventListener('mousedown', _fpOutsideClick), 0);
-}
-
-function _fpOutsideClick(e) {
-  const popup = $('filterPopup');
-  if (!popup.contains(e.target) && e.target !== _fpState.btn) {
-    cancelFilter();
-  }
-}
-
-function onFilterOpChange() {
-  const op = $('filterOp').value;
-  const isBetween = op === 'between' || op === 'notBetween';
-  $('filterAnd').style.display = isBetween ? '' : 'none';
-  $('filterVal2').style.display = isBetween ? '' : 'none';
-}
-
-function applyFilter() {
-  const { type, col } = _fpState;
-  const op = $('filterOp').value;
-  const val1 = parseFloat($('filterVal1').value);
-  if (isNaN(val1)) { cancelFilter(); return; }
-  const filter = { op, val1 };
-  if (op === 'between' || op === 'notBetween') {
-    const val2 = parseFloat($('filterVal2').value);
-    if (isNaN(val2)) { cancelFilter(); return; }
-    filter.val2 = val2;
-  }
-  state.filters[type][col] = filter;
-  cancelFilter();
-  filterTable(type);
-  updateFilterBtns(type);
-}
-
-function clearCurrentFilter() {
-  const { type, col } = _fpState;
-  delete state.filters[type][col];
-  cancelFilter();
-  filterTable(type);
-  updateFilterBtns(type);
-}
-
-function cancelFilter() {
-  $('filterPopup').style.display = 'none';
-  document.removeEventListener('mousedown', _fpOutsideClick);
-}
-
-function updateFilterBtns(type) {
-  $$(`#${type}Table .col-filter-btn`).forEach(btn => {
-    const col = btn.dataset.col;
-    const f = state.filters[type][col];
-    btn.classList.toggle('active', !!f);
-    if (f) {
-      const opLabels = { gt: '>', lt: '<', between: '', notBetween: '!' };
-      const valStr = f.op === 'between' || f.op === 'notBetween' ? `${f.val1}–${f.val2}` : `${opLabels[f.op]}${f.val1}`;
-      btn.innerHTML = `<svg viewBox="0 0 16 16" fill="currentColor"><path d="M1.5 1.5h13L9 8v5l-2 1.5V8z"/></svg> ${valStr}`;
-    } else {
-      btn.innerHTML = `<svg viewBox="0 0 16 16" fill="currentColor"><path d="M1.5 1.5h13L9 8v5l-2 1.5V8z"/></svg>`;
-    }
-  });
-}
-
-// Helpers
-const empty = cols => `<tr><td colspan="${cols}"><div class="state-box">No data</div></td></tr>`;
-const esc = s => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-const fmtF = n => parseFloat(n || 0).toFixed(2);
-const fmtMoney = n => '$' + parseFloat(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-
-function thumb(url, ph = '🖼') {
-  return url ? `<img class="thumb" src="${esc(url)}" alt="" loading="lazy">` : `<div class="thumb-placeholder">${ph}</div>`;
-}
-
-function deltaCell(curr, prev, fmt) {
-  const cv = parseFloat(curr || 0), pv = parseFloat(prev || 0);
-  const pct = pv ? (cv - pv) / pv * 100 : 0;
-  const cls = Math.abs(pct) < 1 ? 'flat' : pct > 0 ? 'up' : 'down';
-  return `<div class="delta-cell"><span>${fmt(cv)}</span><span class="delta-pill ${cls}">${pct > 0 ? '+' : ''}${pct.toFixed(1)}%</span></div>`;
-}
-
-function metrics(row, prev) {
-  return [
-    [row.spend, prev.spend, fmtMoney], [row.roas, prev.roas, v => fmtF(v) + 'x'],
-    [row.cpr, prev.cpr, fmtMoney], [row.aov, prev.aov, fmtMoney],
-    [row.cpm, prev.cpm, fmtMoney], [row.ctr, prev.ctr, v => fmtF(v) + '%'],
-    [row.cpc, prev.cpc, fmtMoney],
-  ].map(([c, p, f]) => `<td>${deltaCell(c, p, f)}</td>`).join('');
-}
-
-// Chat
-function selectModel(model) {
-  state.chatModel = model;
-  $$('.model-btn').forEach(b => b.classList.toggle('active', b.dataset.model === model));
-  // Re-render chat for selected model
-  const container = $('chatMessages');
-  container.innerHTML = '';
-  const msgs = state.chatMessages[model];
-  if (msgs.length === 0) {
-    appendMsg('assistant', 'Hi! Load your data first, then ask questions like:\n- "Top 5 performing ads"\n- "Which creative is underperforming?"\n- "Why is CTR declining?"', 'AI Assistant');
-  } else {
-    msgs.forEach(m => appendMsg(m.role, m.content));
-  }
-}
-
-async function sendMessage() {
-  const input = $('chatInput');
-  const text = input.value.trim();
-  if (!text) return;
-
-  const apiKey = state.chatModel === 'claude' ? state.config.claudeKey : state.config.manusKey;
-  if (!apiKey) return toast(`Please enter ${state.chatModel === 'claude' ? 'Anthropic' : 'Manus'} API Key`, 'error');
-
-  state.chatMessages[state.chatModel].push({ role: 'user', content: text });
-  appendMsg('user', text);
-  input.value = '';
-  input.style.height = 'auto';
-
-  const typingId = 'typing-' + Date.now();
-  const typingEl = document.createElement('div');
-  typingEl.className = 'msg assistant';
-  typingEl.id = typingId;
-  typingEl.innerHTML = '<div class="msg-bubble"><div class="typing-indicator"><div class="typing-dot"></div><div class="typing-dot"></div><div class="typing-dot"></div></div></div>';
-  $('chatMessages').appendChild(typingEl);
-  scrollChat();
-  $('sendBtn').disabled = true;
-
-  const context = {};
-  if ($('ctxAds').checked && state.ads.current.length) { context.ads = state.ads; context.period = state.ads.period; }
-  if ($('ctxCreatives').checked && state.creatives.current.length) { context.creatives = state.creatives; }
-
-  try {
-    const res = await fetch('/api/chat', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...(state.config.claudeKey && state.config.claudeKey !== '__SERVER__' ? {'x-claude-key': state.config.claudeKey} : {}), ...(state.config.manusKey && state.config.manusKey !== '__SERVER__' ? {'x-manus-key': state.config.manusKey} : {}) },
-      body: JSON.stringify({ model: state.chatModel, messages: state.chatMessages[state.chatModel], context }),
-    });
-
-    if (!res.ok) {
-      const raw = await res.text();
-      let msg = `HTTP ${res.status}`;
-      try { const j = JSON.parse(raw); msg = j.error + (j.hint ? '\n' + j.hint : ''); } catch {}
-      throw new Error(msg);
-    }
-
-    $(typingId)?.remove();
-    const bubble = document.createElement('div');
-    bubble.className = 'msg-bubble';
-    const meta = document.createElement('div');
-    meta.className = 'msg-meta';
-    meta.textContent = state.chatModel === 'claude' ? 'Claude' : 'Manus';
-    const msgEl = document.createElement('div');
-    msgEl.className = 'msg assistant';
-    msgEl.append(bubble, meta);
-    $('chatMessages').appendChild(msgEl);
-
-    let fullText = '', buf = '';
-    const reader = res.body.getReader();
-    const decoder = new TextDecoder();
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buf += decoder.decode(value, { stream: true });
-      const lines = buf.split('\n');
-      buf = lines.pop();
-      for (const line of lines) {
-        if (!line.startsWith('data: ')) continue;
-        const payload = line.slice(6);
-        if (payload === '[DONE]') break;
-        try { const j = JSON.parse(payload); if (j.error) throw new Error(j.error); fullText += j.text || ''; bubble.textContent = fullText; scrollChat(); } catch (e) { if (e.message) { fullText = 'Error: ' + e.message; bubble.textContent = fullText; bubble.style.color = '#dc3545'; } }
-      }
-    }
-    state.chatMessages[state.chatModel].push({ role: 'assistant', content: fullText });
-  } catch (err) {
-    $(typingId)?.remove();
-    appendMsg('assistant', 'Error: ' + err.message);
-  } finally {
-    $('sendBtn').disabled = false;
-  }
-}
-
-function appendMsg(role, text, label) {
-  const el = document.createElement('div');
-  el.className = 'msg ' + role;
-  const metaLabel = label || (role === 'user' ? 'You' : state.chatModel === 'claude' ? 'Claude' : 'Manus');
-  el.innerHTML = `<div class="msg-bubble">${esc(text)}</div><div class="msg-meta">${metaLabel}</div>`;
-  $('chatMessages').appendChild(el);
-  scrollChat();
-}
-
-function scrollChat() { const c = $('chatMessages'); c.scrollTop = c.scrollHeight; }
-
-function updateCtxSummary() {
-  const a = state.ads.current.length, c = state.creatives.current.length;
-  $('ctxSummary').textContent = a || c ? `${a} ads, ${c} creatives loaded` : 'No data loaded yet.';
-}
-
-// Toast
-let toastTimer;
-function toast(msg, type = '') {
-  const el = $('toast');
-  el.textContent = msg;
-  el.className = 'show ' + type;
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => el.className = '', 3500);
-}
-</script>
+<script src="app.js"></script>
 </body>
 </html>

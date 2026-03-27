@@ -1,0 +1,545 @@
+window.onerror = function(msg, src, line, col, err) {
+  const el = document.getElementById('toast');
+  if (el) { el.textContent = 'Error: ' + msg; el.className = 'show error'; setTimeout(() => el.className = '', 5000); }
+  console.error('Unhandled error:', msg, src, line, col, err);
+  return true;
+};
+window.onunhandledrejection = function(e) {
+  const msg = e.reason?.message || String(e.reason);
+  const el = document.getElementById('toast');
+  if (el) { el.textContent = 'Error: ' + msg; el.className = 'show error'; setTimeout(() => el.className = '', 5000); }
+  console.error('Unhandled rejection:', e.reason);
+};
+
+const $ = id => document.getElementById(id);
+const $$ = sel => document.querySelectorAll(sel);
+
+const state = {
+  config: Object.fromEntries(['metaToken','accountId','claudeKey'].map(k => [k, localStorage.getItem(k) || ''])),
+  ads: { current: [], previous: [], period: null },
+  creatives: { current: [], previous: [], period: null },
+  chatMessages: [],
+  sort: { ads: { key: 'spend', dir: 1 }, creatives: { key: 'spend', dir: 1 } },
+  filters: { ads: {}, creatives: {} },
+};
+
+// Table config
+const METRIC_COLS = ['spend','roas','cpr','aov','cpm','ctr','cpc'];
+const TABLES = {
+  ads: {
+    cols: 9, idKey: 'ad_name', searchCols: [1],
+    columns: [
+      null,
+      { key: 'ad_name', type: 'text' },
+      { key: 'spend', type: 'metric' },
+      { key: 'roas', type: 'metric' },
+      { key: 'cpr', type: 'metric' },
+      { key: 'aov', type: 'metric' },
+      { key: 'cpm', type: 'metric' },
+      { key: 'ctr', type: 'metric' },
+      { key: 'cpc', type: 'metric' },
+    ],
+    row: (r, p) => `<tr><td>${thumb(r.thumbnail_url)}</td><td class="td-name" title="${esc(r.ad_name)}">${esc(r.ad_name)}</td>${metrics(r, p)}</tr>`
+  },
+  creatives: {
+    cols: 11, idKey: 'creative_id', searchCols: [1, 2, 3],
+    columns: [
+      null,
+      { key: 'primary_text', type: 'text' },
+      { key: 'format', type: 'select' },
+      { key: 'ad_name', type: 'text' },
+      { key: 'spend', type: 'metric' },
+      { key: 'roas', type: 'metric' },
+      { key: 'cpr', type: 'metric' },
+      { key: 'aov', type: 'metric' },
+      { key: 'cpm', type: 'metric' },
+      { key: 'ctr', type: 'metric' },
+      { key: 'cpc', type: 'metric' },
+    ],
+    row: (r, p) => {
+      const f = r.format?.toLowerCase();
+      return `<tr><td>${thumb(r.thumbnail_url)}</td><td class="td-name" title="${esc(r.primary_text)}">${esc(r.primary_text)}</td><td>${f ? `<span class="fmt-badge ${f}">${esc(r.format)}</span>` : ''}</td><td class="td-name" title="${esc(r.ad_name)}">${esc(r.ad_name)}</td>${metrics(r, p)}</tr>`;
+    }
+  }
+};
+
+// Cache
+const cacheKey = (t, d) => `meta_cache_${state.config.accountId}_${t}_${d}`;
+const saveCache = (t, d, v) => { try { localStorage.setItem(cacheKey(t, d), JSON.stringify(v)); } catch {} };
+const loadCache = (t, d) => { try { return JSON.parse(localStorage.getItem(cacheKey(t, d))); } catch { return null; } };
+
+// Init
+window.addEventListener('DOMContentLoaded', async () => {
+  // Fetch server-side config and show status
+  try {
+    const res = await fetch('/api/config');
+    const cfg = await res.json();
+    state.serverConfig = cfg;
+    if (cfg.hasMetaToken) state.config.metaToken = '__SERVER__';
+    if (cfg.hasAdAccountId) state.config.accountId = '__SERVER__';
+    if (cfg.hasClaudeKey) state.config.claudeKey = '__SERVER__';
+    const items = [
+      ['Meta Token', cfg.hasMetaToken],
+      ['Account ID', cfg.hasAdAccountId],
+      ['Anthropic Key', cfg.hasClaudeKey],
+    ];
+    $('cfgStatusList').innerHTML = items.map(([name, ok]) =>
+      `<div style="color:${ok ? '#28a745' : '#6c757d'}">${ok ? '\u2713' : '\u2717'} ${name}</div>`
+    ).join('');
+  } catch {}
+  updateStatus();
+  if (state.config.accountId) {
+    const days = $('periodSelect').value;
+    let hasLocal = false;
+    for (const type of ['ads', 'creatives']) {
+      const cached = loadCache(type, days);
+      if (cached) { state[type] = cached; renderTable(type); showCacheTime(type, cached.cached_at); hasLocal = true; }
+    }
+    if (!hasLocal) fetchAll(false); // auto-load from server cache
+    updateCtxSummary();
+  }
+});
+
+
+function updateStatus() {
+  const ok = !!(state.config.metaToken && state.config.accountId);
+  $('apiStatus').className = 'status-dot ' + (ok ? 'ok' : 'err');
+  $('apiStatusText').textContent = ok ? 'Connected' : 'Not configured';
+}
+
+function showCacheTime(type, iso) {
+  const el = $(type + 'CachedAt');
+  if (!el || !iso) { if (el) el.textContent = ''; return; }
+  const d = new Date(iso);
+  el.textContent = `Updated ${d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })} ${d.toLocaleDateString('en-US')}`;
+}
+
+// Navigation
+function showPage(name) {
+  $$('.page').forEach(p => p.classList.remove('active'));
+  $$('.nav-item').forEach(n => n.classList.remove('active'));
+  $('page-' + name).classList.add('active');
+  event?.currentTarget?.classList.add('active');
+}
+
+// Fetch
+async function fetchAll(refresh = true) {
+  if (!state.config.metaToken || !state.config.accountId)
+    return toast('Please enter Meta Token and Account ID first', 'error');
+
+  const days = $('periodSelect').value;
+  const headers = {};
+  if (state.config.metaToken && state.config.metaToken !== '__SERVER__') headers['x-meta-token'] = state.config.metaToken;
+  if (state.config.accountId && state.config.accountId !== '__SERVER__') headers['x-meta-account-id'] = state.config.accountId;
+
+  // Show loading overlay on each table
+  for (const t of ['ads', 'creatives']) {
+    const wrap = $(t + 'Table').closest('.table-wrap');
+    let ov = wrap.querySelector('.load-overlay');
+    if (!ov) { ov = document.createElement('div'); ov.className = 'load-overlay'; wrap.appendChild(ov); }
+    ov.innerHTML = `<div class="load-popup"><div class="loader"></div><div class="load-text" id="loadProgress-${t}">Connecting...</div></div>`;
+    ov.style.display = 'flex';
+  }
+
+  const startTime = performance.now();
+  try {
+    const res = await fetch(`/api/dashboard?days=${days}${refresh ? '&refresh=1' : ''}`, { headers });
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buf = '', data = null;
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+      const lines = buf.split('\n');
+      buf = lines.pop();
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        try {
+          const j = JSON.parse(line.slice(6));
+          if (j.progress) {
+            $$('.load-text').forEach(el => el.textContent = j.progress);
+          }
+          if (j.result) data = j.result;
+          if (j.error) throw new Error(j.error + ': ' + JSON.stringify(j.detail));
+        } catch (e) { if (e.message) throw e; }
+      }
+    }
+
+    if (!data) throw new Error('No data received');
+
+    state.ads = { current: data.ads.current, previous: data.ads.previous, period: data.period };
+    state.creatives = { current: data.creatives.current, previous: data.creatives.previous, period: data.period };
+
+    saveCache('ads', days, state.ads);
+    saveCache('creatives', days, state.creatives);
+    renderTable('ads');
+    renderTable('creatives');
+    showCacheTime('ads', data.cached_at);
+    showCacheTime('creatives', data.cached_at);
+    updateCtxSummary();
+
+    $$('.load-overlay').forEach(el => el.style.display = 'none');
+    const elapsed = ((performance.now() - startTime) / 1000).toFixed(1);
+    $('apiStatus').className = 'status-dot ok';
+    $('apiStatusText').textContent = `Loaded in ${elapsed}s`;
+    $('apiStatusText').style.color = '';
+    toast(`Loaded ${data.ads.current.length} ads and ${data.creatives.current.length} creatives in ${elapsed}s`, 'success');
+  } catch (err) {
+    $$('.load-overlay').forEach(el => el.style.display = 'none');
+    $('apiStatus').className = 'status-dot err';
+    $('apiStatusText').textContent = 'Error';
+    $('apiStatusText').style.color = '';
+    toast('Error: ' + err.message, 'error');
+    for (const t of ['ads', 'creatives']) $(t + 'Body').innerHTML = empty(TABLES[t].cols);
+  }
+}
+
+// Data helpers
+function enrichRow(row) {
+  const findAction = (arr, type) => (arr || []).find(x => x.action_type === type || x.action_type === 'omni_' + type);
+  const pc = row.purchase_count ?? parseFloat(findAction(row.actions, 'purchase')?.value || 0);
+  const pv = row.purchase_value ?? parseFloat(findAction(row.action_values, 'purchase')?.value || 0);
+  const roas = row.purchase_roas ? parseFloat(Array.isArray(row.purchase_roas) ? (row.purchase_roas[0]?.value || 0) : row.purchase_roas) : 0;
+  return { ...row, roas, cpr: pc ? parseFloat(row.spend || 0) / pc : 0, aov: pc && pv ? pv / pc : 0 };
+}
+
+// Render
+function renderTable(type) {
+  const cfg = TABLES[type];
+  const data = state[type];
+  const prevMap = {};
+  data.previous.map(enrichRow).forEach(r => prevMap[r[cfg.idKey]] = r);
+  const { key, dir } = state.sort[type];
+  const sorted = data.current.map(enrichRow).sort((a, b) => (parseFloat(b[key] || 0) - parseFloat(a[key] || 0)) * dir);
+
+  // Store enriched data for filtering + previous totals for delta
+  state[type]._enriched = sorted;
+  state[type]._prevEnriched = data.previous.map(enrichRow);
+
+  $(type + 'Count').textContent = sorted.length + ' ' + type;
+  if (data.period) $(type + 'PeriodLabel').textContent = `${data.period.current.since} - ${data.period.current.until} vs ${data.period.previous.since} - ${data.period.previous.until}`;
+
+  $(type + 'Body').innerHTML = sorted.map(r => cfg.row(r, prevMap[r[cfg.idKey]] || {})).join('') || empty(cfg.cols);
+
+  $$(`#${type}Table thead th`).forEach(th => {
+    th.classList.toggle('sorted', th.dataset.sort === key);
+  });
+  filterTable(type);
+}
+
+function sortTable(type, key) {
+  const s = state.sort[type];
+  s.dir = s.key === key ? s.dir * -1 : 1;
+  s.key = key;
+  renderTable(type);
+}
+
+function filterTable(type) {
+  const enriched = state[type]._enriched || [];
+  const metricFilters = state.filters[type];
+
+  // Collect text/select filters from header row
+  const colFilters = {};
+  $$(`#${type}Table thead [data-col]`).forEach(el => {
+    const col = el.dataset.col;
+    const t = el.dataset.type;
+    const v = el.value.trim();
+    if (v && !(t === 'select' && v === '')) colFilters[col] = { type: t, value: v };
+  });
+
+  $$(`#${type}Body tr`).forEach((tr, idx) => {
+    const row = enriched[idx];
+    if (!row) return;
+    let show = true;
+
+    // 1. Text/select column filters
+    for (const [col, f] of Object.entries(colFilters)) {
+      if (f.type === 'text') {
+        if (!String(row[col] || '').toLowerCase().includes(f.value.toLowerCase())) { show = false; break; }
+      } else if (f.type === 'select') {
+        if (f.value && String(row[col] || '') !== f.value) { show = false; break; }
+      }
+    }
+
+    // 2. Metric popup filters
+    if (show) {
+      for (const [col, f] of Object.entries(metricFilters)) {
+        const v = parseFloat(row[col] || 0);
+        if (f.op === 'gt' && !(v > f.val1)) { show = false; break; }
+        if (f.op === 'lt' && !(v < f.val1)) { show = false; break; }
+        if (f.op === 'between' && !(v >= f.val1 && v <= f.val2)) { show = false; break; }
+        if (f.op === 'notBetween' && !(v < f.val1 || v > f.val2)) { show = false; break; }
+      }
+    }
+
+    tr.style.display = show ? '' : 'none';
+  });
+
+  // Remove old total row
+  const oldTotal = document.querySelector(`#${type}Body tr.total-row`);
+  if (oldTotal) oldTotal.remove();
+
+  // Calculate totals from visible rows
+  const visibleRows = [...$$(`#${type}Body tr`)].filter(tr => tr.style.display !== 'none');
+  const visible = visibleRows.length;
+  const total = enriched.length;
+  $(type + 'Count').textContent = visible < total ? `${visible}/${total} ${type}` : `${total} ${type}`;
+
+  if (visible > 0) {
+    const allTrs = [...$$(`#${type}Body tr:not(.total-row)`)];
+    const visData = allTrs.map((tr, i) => tr.style.display !== 'none' ? enriched[i] : null).filter(Boolean);
+    const s = k => visData.reduce((a, r) => a + parseFloat(r[k] || 0), 0);
+    const totalSpend = s('spend'), totalImpr = s('impressions'), totalClicks = s('clicks');
+    const totalPc = s('purchase_count'), totalPv = s('purchase_value');
+    const tRoas = totalSpend ? totalPv / totalSpend : 0;
+    const tCpr = totalPc ? totalSpend / totalPc : 0;
+    const tAov = totalPc ? totalPv / totalPc : 0;
+    const tCpm = totalImpr ? totalSpend / totalImpr * 1000 : 0;
+    const tCtr = totalImpr ? totalClicks / totalImpr * 100 : 0;
+    const tCpc = totalClicks ? totalSpend / totalClicks : 0;
+
+    // Previous period totals for delta
+    const prev = state[type]._prevEnriched || [];
+    const ps = k => prev.reduce((a, r) => a + parseFloat(r[k] || 0), 0);
+    const pSpend = ps('spend'), pImpr = ps('impressions'), pClicks = ps('clicks');
+    const pPc = ps('purchase_count'), pPv = ps('purchase_value');
+    const pRoas = pSpend ? pPv / pSpend : 0;
+    const pCpr = pPc ? pSpend / pPc : 0;
+    const pAov = pPc ? pPv / pPc : 0;
+    const pCpm = pImpr ? pSpend / pImpr * 1000 : 0;
+    const pCtr = pImpr ? pClicks / pImpr * 100 : 0;
+    const pCpc = pClicks ? pSpend / pClicks : 0;
+
+    const totalRow = { spend: totalSpend, roas: tRoas, cpr: tCpr, aov: tAov, cpm: tCpm, ctr: tCtr, cpc: tCpc };
+    const prevRow = { spend: pSpend, roas: pRoas, cpr: pCpr, aov: pAov, cpm: pCpm, ctr: pCtr, cpc: pCpc };
+
+    const metricCells = metrics(totalRow, prevRow);
+
+    const labelCols = type === 'ads' ? 2 : 4;
+    const tr = document.createElement('tr');
+    tr.className = 'total-row';
+    tr.innerHTML = `<td colspan="${labelCols}"><b>Total (${visible})</b></td>${metricCells}`;
+    $(type + 'Body').appendChild(tr);
+  }
+}
+
+// ── Filter Popup ──────────────────────────────────────────────────────────────
+let _fpState = { type: null, col: null, btn: null };
+
+function openFilterPopup(type, col, btn) {
+  const popup = $('filterPopup');
+  _fpState = { type, col, btn };
+
+  // Load existing filter
+  const existing = state.filters[type][col];
+  $('filterOp').value = existing?.op || 'gt';
+  $('filterVal1').value = existing?.val1 ?? '';
+  $('filterVal2').value = existing?.val2 ?? '';
+  $('filterPopupTitle').textContent = col.toUpperCase() + ' Filter';
+  onFilterOpChange();
+
+  // Position popup near button, ensure it stays in viewport
+  const rect = btn.getBoundingClientRect();
+  popup.style.display = 'block';
+  const popH = popup.offsetHeight;
+  const popW = popup.offsetWidth;
+  const top = rect.bottom + 4 + popH > window.innerHeight ? rect.top - popH - 4 : rect.bottom + 4;
+  popup.style.top = Math.max(4, top) + 'px';
+  popup.style.left = Math.min(rect.left, window.innerWidth - popW - 8) + 'px';
+
+  // Close on outside click
+  setTimeout(() => document.addEventListener('mousedown', _fpOutsideClick), 0);
+}
+
+function _fpOutsideClick(e) {
+  const popup = $('filterPopup');
+  if (!popup.contains(e.target) && e.target !== _fpState.btn) {
+    cancelFilter();
+  }
+}
+
+function onFilterOpChange() {
+  const op = $('filterOp').value;
+  const isBetween = op === 'between' || op === 'notBetween';
+  $('filterAnd').style.display = isBetween ? '' : 'none';
+  $('filterVal2').style.display = isBetween ? '' : 'none';
+}
+
+function applyFilter() {
+  const { type, col } = _fpState;
+  const op = $('filterOp').value;
+  const val1 = parseFloat($('filterVal1').value);
+  if (isNaN(val1)) { cancelFilter(); return; }
+  const filter = { op, val1 };
+  if (op === 'between' || op === 'notBetween') {
+    const val2 = parseFloat($('filterVal2').value);
+    if (isNaN(val2)) { cancelFilter(); return; }
+    filter.val2 = val2;
+  }
+  state.filters[type][col] = filter;
+  cancelFilter();
+  filterTable(type);
+  updateFilterBtns(type);
+}
+
+function clearCurrentFilter() {
+  const { type, col } = _fpState;
+  delete state.filters[type][col];
+  cancelFilter();
+  filterTable(type);
+  updateFilterBtns(type);
+}
+
+function cancelFilter() {
+  $('filterPopup').style.display = 'none';
+  document.removeEventListener('mousedown', _fpOutsideClick);
+}
+
+function updateFilterBtns(type) {
+  $$(`#${type}Table .col-filter-btn`).forEach(btn => {
+    const col = btn.dataset.col;
+    const f = state.filters[type][col];
+    btn.classList.toggle('active', !!f);
+    if (f) {
+      const opLabels = { gt: '>', lt: '<', between: '', notBetween: '!' };
+      const valStr = f.op === 'between' || f.op === 'notBetween' ? `${f.val1}–${f.val2}` : `${opLabels[f.op]}${f.val1}`;
+      btn.innerHTML = `<svg viewBox="0 0 16 16" fill="currentColor"><path d="M1.5 1.5h13L9 8v5l-2 1.5V8z"/></svg> ${valStr}`;
+    } else {
+      btn.innerHTML = `<svg viewBox="0 0 16 16" fill="currentColor"><path d="M1.5 1.5h13L9 8v5l-2 1.5V8z"/></svg>`;
+    }
+  });
+}
+
+// Helpers
+const empty = cols => `<tr><td colspan="${cols}"><div class="state-box">No data</div></td></tr>`;
+const esc = s => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+const fmtF = n => parseFloat(n || 0).toFixed(2);
+const fmtMoney = n => '$' + parseFloat(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+function thumb(url) {
+  return url ? `<img class="thumb" src="${esc(url)}" alt="" loading="lazy">` : `<div class="thumb-placeholder"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg></div>`;
+}
+
+function deltaCell(curr, prev, fmt) {
+  const cv = parseFloat(curr || 0), pv = parseFloat(prev || 0);
+  const pct = pv ? (cv - pv) / pv * 100 : 0;
+  const cls = Math.abs(pct) < 1 ? 'flat' : pct > 0 ? 'up' : 'down';
+  return `<div class="delta-cell"><span>${fmt(cv)}</span><span class="delta-pill ${cls}">${pct > 0 ? '+' : ''}${pct.toFixed(1)}%</span></div>`;
+}
+
+function metrics(row, prev) {
+  return [
+    [row.spend, prev.spend, fmtMoney], [row.roas, prev.roas, v => fmtF(v) + 'x'],
+    [row.cpr, prev.cpr, fmtMoney], [row.aov, prev.aov, fmtMoney],
+    [row.cpm, prev.cpm, fmtMoney], [row.ctr, prev.ctr, v => fmtF(v) + '%'],
+    [row.cpc, prev.cpc, fmtMoney],
+  ].map(([c, p, f]) => `<td>${deltaCell(c, p, f)}</td>`).join('');
+}
+
+// Chat
+async function sendMessage() {
+  const input = $('chatInput');
+  const text = input.value.trim();
+  if (!text) return;
+
+  const apiKey = state.config.claudeKey;
+  if (!apiKey) return toast('Anthropic API Key not configured', 'error');
+
+  const container = $('chatMessages');
+  state.chatMessages.push({ role: 'user', content: text });
+  appendMsg('user', text, 'You');
+  input.value = '';
+  input.style.height = 'auto';
+
+  const typingEl = document.createElement('div');
+  typingEl.className = 'msg assistant';
+  typingEl.innerHTML = '<div class="msg-bubble"><div class="typing-indicator"><div class="typing-dot"></div><div class="typing-dot"></div><div class="typing-dot"></div></div></div>';
+  container.appendChild(typingEl);
+  scrollChat();
+
+  const context = {};
+  if (state.ads.current.length) { context.ads = state.ads; context.period = state.ads.period; }
+  if (state.creatives.current.length) { context.creatives = state.creatives; }
+
+  try {
+    const res = await fetch('/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...(state.config.claudeKey && state.config.claudeKey !== '__SERVER__' ? {'x-claude-key': state.config.claudeKey} : {}) },
+      body: JSON.stringify({ messages: state.chatMessages, context }),
+    });
+
+    if (!res.ok) {
+      const raw = await res.text();
+      let msg = `HTTP ${res.status}`;
+      try { const j = JSON.parse(raw); msg = j.error + (j.hint ? '\n' + j.hint : ''); } catch {}
+      throw new Error(msg);
+    }
+
+    typingEl.innerHTML = '<div class="msg-bubble"></div><div class="msg-meta">Claude</div>';
+    const bubble = typingEl.querySelector('.msg-bubble');
+
+    let fullText = '', buf = '';
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+      const lines = buf.split('\n');
+      buf = lines.pop();
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        const payload = line.slice(6);
+        if (payload === '[DONE]') break;
+        try {
+          const j = JSON.parse(payload);
+          if (j.error) throw new Error(j.error);
+          fullText += j.text || '';
+          bubble.textContent = fullText;
+          scrollChat();
+        } catch (e) { if (e.message) { fullText = 'Error: ' + e.message; bubble.textContent = fullText; bubble.style.color = '#dc3545'; } }
+      }
+    }
+    state.chatMessages.push({ role: 'assistant', content: fullText });
+  } catch (err) {
+    typingEl.innerHTML = `<div class="msg-bubble" style="color:#dc3545">${esc('Error: ' + err.message)}</div><div class="msg-meta">Claude</div>`;
+    state.chatMessages.push({ role: 'assistant', content: 'Error: ' + err.message });
+  }
+}
+
+function appendMsg(role, text, label) {
+  const el = document.createElement('div');
+  el.className = 'msg ' + role;
+  el.innerHTML = `<div class="msg-bubble">${esc(text)}</div><div class="msg-meta">${label}</div>`;
+  $('chatMessages').appendChild(el);
+  scrollChat();
+}
+
+function scrollChat() { const c = $('chatMessages'); if (c) c.scrollTop = c.scrollHeight; }
+
+function updateCtxSummary() {
+  const a = state.ads.current.length, c = state.creatives.current.length;
+  if (!a && !c) { $('ctxSummary').innerHTML = 'No data loaded yet.'; return; }
+  const adsCtx = state.ads.current.filter(r => parseFloat(r.spend || 0) > 10);
+  const creCtx = state.creatives.current.filter(r => parseFloat(r.spend || 0) > 10);
+  const adsPrev = (state.ads.previous || []).filter(r => parseFloat(r.spend || 0) > 10);
+  const crePrev = (state.creatives.previous || []).filter(r => parseFloat(r.spend || 0) > 10);
+  // Estimate tokens: ~210 chars per entry ÷ 4
+  const entries = adsCtx.length + adsPrev.length + creCtx.length + crePrev.length;
+  const estTokens = Math.round(entries * 210 / 4) + 150;
+  // Claude Sonnet 4.5: $3/M input tokens
+  const estCost = (estTokens / 1000000 * 3).toFixed(4);
+  $('ctxSummary').innerHTML = `Loaded: ${a} ads, ${c} creatives<br><br><b>Context for Claude</b> (only ads with spend &gt; $10):<br>${adsCtx.length} ads + ${creCtx.length} creatives<br>Estimated: ~${estTokens.toLocaleString()} tokens (~$${estCost}/message)`;
+}
+
+// Toast
+let toastTimer;
+function toast(msg, type = '') {
+  const el = $('toast');
+  el.textContent = msg;
+  el.className = 'show ' + type;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.className = '', 3500);
+}
