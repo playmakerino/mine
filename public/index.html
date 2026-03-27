@@ -394,8 +394,18 @@ const loadCache = (t, d) => { try { return JSON.parse(localStorage.getItem(cache
 const CFG_FIELDS = [['metaToken','cfgMetaToken'],['accountId','cfgAccountId'],['claudeKey','cfgClaudeKey'],['manusKey','cfgManusKey']];
 
 // Init
-window.addEventListener('DOMContentLoaded', () => {
+window.addEventListener('DOMContentLoaded', async () => {
   CFG_FIELDS.forEach(([k, id]) => $(id).value = state.config[k]);
+  // Fetch server-side config to check if env vars are set
+  try {
+    const res = await fetch('/api/config');
+    const cfg = await res.json();
+    state.serverConfig = cfg;
+    if (cfg.hasMetaToken && !state.config.metaToken) state.config.metaToken = '__SERVER__';
+    if (cfg.hasAdAccountId && !state.config.accountId) state.config.accountId = '__SERVER__';
+    if (cfg.hasClaudeKey && !state.config.claudeKey) state.config.claudeKey = '__SERVER__';
+    if (cfg.hasManusKey && !state.config.manusKey) state.config.manusKey = '__SERVER__';
+  } catch {}
   updateStatus();
   if (state.config.accountId) {
     const days = $('periodSelect').value;
@@ -441,7 +451,9 @@ async function fetchAll() {
     return toast('Please enter Meta Token and Account ID first', 'error');
 
   const days = $('periodSelect').value;
-  const headers = { 'x-meta-token': state.config.metaToken, 'x-meta-account-id': state.config.accountId };
+  const headers = {};
+  if (state.config.metaToken && state.config.metaToken !== '__SERVER__') headers['x-meta-token'] = state.config.metaToken;
+  if (state.config.accountId && state.config.accountId !== '__SERVER__') headers['x-meta-account-id'] = state.config.accountId;
 
   for (const t of ['ads', 'creatives']) $(t + 'Body').innerHTML = `<tr><td colspan="${TABLES[t].cols}"><div class="state-box"><div class="loader"></div></div></td></tr>`;
 
@@ -710,7 +722,7 @@ async function sendMessage() {
   try {
     const res = await fetch('/api/chat', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-claude-key': state.config.claudeKey, 'x-manus-key': state.config.manusKey },
+      headers: { 'Content-Type': 'application/json', ...(state.config.claudeKey && state.config.claudeKey !== '__SERVER__' ? {'x-claude-key': state.config.claudeKey} : {}), ...(state.config.manusKey && state.config.manusKey !== '__SERVER__' ? {'x-manus-key': state.config.manusKey} : {}) },
       body: JSON.stringify({ model: state.chatModel, messages: state.chatMessages, context }),
     });
 
