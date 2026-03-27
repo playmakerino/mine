@@ -194,16 +194,9 @@ thead th .th-content{display:flex;align-items:center;gap:4px;white-space:nowrap}
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
       AI Chat
     </div>
-    <div class="config-panel">
-      <label>Meta Token</label>
-      <input type="password" id="cfgMetaToken" placeholder="EAAxxxxxxx...">
-      <label>Account ID</label>
-      <input type="text" id="cfgAccountId" placeholder="123456789">
-      <label>Anthropic Key</label>
-      <input type="password" id="cfgClaudeKey" placeholder="sk-ant-...">
-      <label>Manus Key</label>
-      <input type="password" id="cfgManusKey" placeholder="Optional">
-      <button class="btn btn-primary" onclick="saveConfig()">Save</button>
+    <div class="config-panel" id="configStatus">
+      <label style="margin-bottom:8px;font-size:10px">Server Configuration</label>
+      <div id="cfgStatusList" style="font-size:11px;line-height:2"></div>
     </div>
   </aside>
 
@@ -390,31 +383,26 @@ const cacheKey = (t, d) => `meta_cache_${state.config.accountId}_${t}_${d}`;
 const saveCache = (t, d, v) => { try { localStorage.setItem(cacheKey(t, d), JSON.stringify(v)); } catch {} };
 const loadCache = (t, d) => { try { return JSON.parse(localStorage.getItem(cacheKey(t, d))); } catch { return null; } };
 
-// Config field mapping
-const CFG_FIELDS = [['metaToken','cfgMetaToken'],['accountId','cfgAccountId'],['claudeKey','cfgClaudeKey'],['manusKey','cfgManusKey']];
-
 // Init
 window.addEventListener('DOMContentLoaded', async () => {
-  CFG_FIELDS.forEach(([k, id]) => $(id).value = state.config[k]);
-  // Fetch server-side config to check if env vars are set
+  // Fetch server-side config and show status
   try {
     const res = await fetch('/api/config');
     const cfg = await res.json();
     state.serverConfig = cfg;
-    const serverMap = [
-      ['hasMetaToken', 'metaToken', 'cfgMetaToken'],
-      ['hasAdAccountId', 'accountId', 'cfgAccountId'],
-      ['hasClaudeKey', 'claudeKey', 'cfgClaudeKey'],
-      ['hasManusKey', 'manusKey', 'cfgManusKey'],
+    if (cfg.hasMetaToken) state.config.metaToken = '__SERVER__';
+    if (cfg.hasAdAccountId) state.config.accountId = '__SERVER__';
+    if (cfg.hasClaudeKey) state.config.claudeKey = '__SERVER__';
+    if (cfg.hasManusKey) state.config.manusKey = '__SERVER__';
+    const items = [
+      ['Meta Token', cfg.hasMetaToken],
+      ['Account ID', cfg.hasAdAccountId],
+      ['Anthropic Key', cfg.hasClaudeKey],
+      ['Manus Key', cfg.hasManusKey],
     ];
-    serverMap.forEach(([cfgKey, stateKey, inputId]) => {
-      if (cfg[cfgKey]) {
-        if (!state.config[stateKey]) state.config[stateKey] = '__SERVER__';
-        const el = $(inputId);
-        el.placeholder = '\u2713 Configured on server';
-        el.style.borderColor = '#28a745';
-      }
-    });
+    $('cfgStatusList').innerHTML = items.map(([name, ok]) =>
+      `<div style="color:${ok ? '#28a745' : '#6c757d'}">${ok ? '\u2713' : '\u2717'} ${name}</div>`
+    ).join('');
   } catch {}
   updateStatus();
   if (state.config.accountId) {
@@ -427,12 +415,6 @@ window.addEventListener('DOMContentLoaded', async () => {
   }
 });
 
-function saveConfig() {
-  CFG_FIELDS.forEach(([k, id]) => state.config[k] = $(id).value.trim());
-  Object.entries(state.config).forEach(([k, v]) => localStorage.setItem(k, v));
-  updateStatus();
-  toast('Configuration saved', 'success');
-}
 
 function updateStatus() {
   const ok = !!(state.config.metaToken && state.config.accountId);
