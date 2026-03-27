@@ -22,10 +22,11 @@ function loadCacheFromFile() {
     if (fs.existsSync(CACHE_FILE)) {
       const raw = JSON.parse(fs.readFileSync(CACHE_FILE, 'utf8'));
       const now = Date.now();
-      // Filter out entries older than 30 days
+      // Filter out expired entries and entries missing object_story_spec (legacy cache)
       const filtered = {};
       for (const [id, entry] of Object.entries(raw)) {
         if (entry._cachedAt && (now - entry._cachedAt) > CACHE_TTL) continue;
+        if (entry.creative && !entry.creative.object_story_spec && !entry.creative.asset_feed_spec) continue;
         filtered[id] = entry;
       }
       return filtered;
@@ -193,8 +194,17 @@ function buildPrimaryTextMap(allAds) {
   const map = {};
   for (const ad of allAds) {
     const cid = ad.creative?.id;
-    const text = ad.creative?.asset_feed_spec?.bodies?.[0]?.text;
-    if (cid && text) map[cid] = text;
+    if (!cid) continue;
+    // Try asset_feed_spec first (carousel/dynamic ads)
+    const text = ad.creative?.asset_feed_spec?.bodies?.[0]?.text
+      // Fallback: object_story_spec (single image/video ads)
+      || ad.creative?.object_story_spec?.link_data?.message
+      || ad.creative?.object_story_spec?.video_data?.message
+      || ad.creative?.object_story_spec?.photo_data?.message
+      // Fallback: creative name
+      || ad.creative?.name
+      || '';
+    if (text) map[cid] = text;
   }
   return map;
 }
@@ -260,7 +270,7 @@ app.get('/api/dashboard', async (req, res) => {
     const missingIds = allAdIds.filter(id => !allAdsCache.data[id]);
     if (missingIds.length > 0) {
       progress(`Fetching creative info for ${missingIds.length} new ads... [${elapsed()}]`);
-      const fetched = await fetchAdsByIds(token, missingIds, 'id,creative{id,name,thumbnail_url,image_url,object_type,asset_feed_spec}');
+      const fetched = await fetchAdsByIds(token, missingIds, 'id,creative{id,name,thumbnail_url,image_url,object_type,asset_feed_spec,object_story_spec}');
       const now = Date.now();
       for (const ad of fetched) {
         allAdsCache.data[ad.id] = { ...ad, _cachedAt: now };
