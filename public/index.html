@@ -749,7 +749,7 @@ async function sendMessage() {
         if (!line.startsWith('data: ')) continue;
         const payload = line.slice(6);
         if (payload === '[DONE]') break;
-        try { const j = JSON.parse(payload); if (j.error) throw new Error(j.error); fullText += j.text || ''; bubble.textContent = fullText; scrollChat(); } catch {}
+        try { const j = JSON.parse(payload); if (j.error) throw new Error(j.error); fullText += j.text || ''; bubble.textContent = fullText; scrollChat(); } catch (e) { if (e.message) { fullText = 'Error: ' + e.message; bubble.textContent = fullText; bubble.style.color = '#dc3545'; } }
       }
     }
     state.chatMessages.push({ role: 'assistant', content: fullText });
