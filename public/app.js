@@ -431,7 +431,7 @@ const fmtMoney = n => '$' + parseFloat(n || 0).toLocaleString('en-US', { minimum
 function thumb(url, fullUrl) {
   if (!url) return `<div class="thumb-placeholder"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg></div>`;
   const hasFullSize = fullUrl && fullUrl !== url;
-  return `<img class="thumb" src="${esc(url)}"${hasFullSize ? ` data-full="${esc(fullUrl)}" onmouseenter="showThumbPreview(event)" onmouseleave="hideThumbPreview()"` : ''} alt="" loading="lazy">`;
+  return `<img class="thumb" src="${esc(url)}"${hasFullSize ? ` data-full="${esc(fullUrl)}" onmouseenter="showThumbPreview(event)" onmouseleave="hideThumbPreview()" onclick="event.stopPropagation()"` : ''} alt="" loading="lazy">`;
 }
 
 const _thumbPreview = (() => {
@@ -466,6 +466,7 @@ function showThumbPreview(e) {
 function hideThumbPreview() {
   _thumbPreview.style.display = 'none';
 }
+document.addEventListener('click', hideThumbPreview);
 
 function deltaCell(curr, prev, fmt, invert) {
   const cv = parseFloat(curr || 0), pv = parseFloat(prev || 0);
