@@ -172,8 +172,8 @@ async function fetchAll(refresh = true) {
 
     if (!data) throw new Error('No data received');
 
-    state.ads = { current: data.ads.current, previous: data.ads.previous, period: data.period };
-    state.creatives = { current: data.creatives.current, previous: data.creatives.previous, period: data.period };
+    state.ads = { current: data.ads.current, previous: data.ads.previous, period: data.period, cached_at: data.cached_at };
+    state.creatives = { current: data.creatives.current, previous: data.creatives.previous, period: data.period, cached_at: data.cached_at };
 
     saveCache('ads', days, state.ads);
     saveCache('creatives', days, state.creatives);
