@@ -82,7 +82,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     if (cfg.hasClaudeKey) state.config.claudeKey = '__SERVER__';
     const items = [
       ['Meta Token', cfg.hasMetaToken],
-      ['Account ID', cfg.hasAdAccountId],
+      ['Ad Account ID', cfg.hasAdAccountId],
       ['Anthropic Key', cfg.hasClaudeKey],
     ];
     $('cfgStatusList').innerHTML = items.map(([name, ok]) =>
