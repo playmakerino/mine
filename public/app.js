@@ -330,7 +330,8 @@ function buildTotalRow(type, filtered, prevMap, cfg) {
   const labelCols = type === 'ads' ? 2 : 4;
   const tr = document.createElement('tr');
   tr.className = 'total-row';
-  tr.innerHTML = `<td colspan="${labelCols}"><b>Total (${filtered.length})</b></td>${metrics(totalRow, prevRow)}`;
+  const emptyTds = '<td></td>'.repeat(labelCols - 1);
+  tr.innerHTML = `<td><b>Total (${filtered.length})</b></td>${emptyTds}${metrics(totalRow, prevRow)}`;
   $(type + 'Body').appendChild(tr);
 }
 
