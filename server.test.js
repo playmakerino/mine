@@ -160,7 +160,7 @@ describe('groupByAdName', () => {
     expect(result[0].purchase_value).toBe(250);
   });
 
-  test('computes purchase_roas when spend and purchase_value are positive', () => {
+  test('computes roas when spend and purchase_value are positive', () => {
     const rows = [
       {
         ad_name: 'Ad A', impressions: '100', clicks: '10', spend: '100', reach: '0', unique_clicks: '0', frequency: '0',
@@ -169,15 +169,15 @@ describe('groupByAdName', () => {
       },
     ];
     const result = groupByAdName(rows);
-    expect(result[0].purchase_roas).toEqual([{ value: '5.0000' }]);
+    expect(result[0].roas).toBe(5);
   });
 
-  test('sets purchase_roas to null when no purchases', () => {
+  test('sets roas to 0 when no purchases', () => {
     const rows = [
       { ad_name: 'Ad A', impressions: '100', clicks: '10', spend: '50', reach: '0', unique_clicks: '0', frequency: '0' },
     ];
     const result = groupByAdName(rows);
-    expect(result[0].purchase_roas).toBeNull();
+    expect(result[0].roas).toBe(0);
   });
 
   test('uses "unknown" for rows without ad_name', () => {

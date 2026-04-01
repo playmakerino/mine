@@ -24,29 +24,52 @@ function saveCacheAsync(filePath, data) {
 const CACHE_FILE = path.join(__dirname, '.cache-creatives.json');
 const CACHE_TTL = 30 * 24 * 60 * 60 * 1000;
 
+function slimCreative(ad) {
+  const c = ad.creative;
+  if (!c) return { id: ad.id, creative: null, _cachedAt: ad._cachedAt || Date.now() };
+  return {
+    id: ad.id,
+    creative: {
+      id:           c.id,
+      name:         c.name || '',
+      object_type:  c.object_type || '',
+      primary_text: c.primary_text || '',
+      is_catalog:   !!c.object_story_spec?.template_data,
+    },
+    _cachedAt: ad._cachedAt || Date.now(),
+  };
+}
+
 function loadCacheFromFile() {
   try {
     if (fs.existsSync(CACHE_FILE)) {
       const raw = JSON.parse(fs.readFileSync(CACHE_FILE, 'utf8'));
       const now = Date.now();
-      // Filter out expired entries and legacy cache missing data
       const filtered = {};
+      let migrated = false;
       for (const [id, entry] of Object.entries(raw)) {
         if (entry._cachedAt && (now - entry._cachedAt) > CACHE_TTL) continue;
-        if (entry.creative && !entry.creative.object_story_spec && !entry.creative.asset_feed_spec) continue;
-        filtered[id] = entry;
+        // Auto-migrate old bulky entries to slim format
+        if (entry.creative?.object_story_spec || entry.creative?.asset_feed_spec) {
+          const primaryText = entry.creative?.asset_feed_spec?.bodies?.[0]?.text
+            || entry.creative?.object_story_spec?.link_data?.message
+            || entry.creative?.object_story_spec?.video_data?.message
+            || entry.creative?.object_story_spec?.photo_data?.message
+            || entry.creative?.name || '';
+          filtered[id] = slimCreative({ ...entry, creative: { ...entry.creative, primary_text: primaryText } });
+          migrated = true;
+        } else {
+          filtered[id] = entry;
+        }
       }
+      if (migrated) saveCacheAsync(CACHE_FILE, filtered);
       return filtered;
     }
   } catch (e) { console.error('Cache read error:', e.message); }
   return {};
 }
 
-function saveCacheToFile(data) {
-  saveCacheAsync(CACHE_FILE, data);
-}
-
-let allAdsCache = { data: loadCacheFromFile() };
+let creativeCache = loadCacheFromFile();
 
 // ── File-based cache for insights (survive server restart) ──────────────────
 const INSIGHTS_CACHE_FILE = path.join(__dirname, '.cache-insights.json');
@@ -60,15 +83,11 @@ function loadInsightsCacheFromFile() {
   return {};
 }
 
-function saveInsightsCacheToFile(data) {
-  saveCacheAsync(INSIGHTS_CACHE_FILE, data);
-}
-
 let insightsCache = loadInsightsCacheFromFile();
 
 // ── File-based cache for HD thumbnails (creative_id → {url, _cachedAt}) ──────
 const HD_THUMB_CACHE_FILE = path.join(__dirname, '.cache-hd-thumbs.json');
-const HD_THUMB_TTL = 7 * 24 * 60 * 60 * 1000; // 7 days
+const HD_THUMB_TTL = 24 * 60 * 60 * 1000; // 24 hours (Meta CDN URLs expire quickly)
 
 function loadHdThumbCache() {
   try {
@@ -76,12 +95,13 @@ function loadHdThumbCache() {
       const raw = JSON.parse(fs.readFileSync(HD_THUMB_CACHE_FILE, 'utf8'));
       const now = Date.now();
       const filtered = {};
+      let changed = false;
       for (const [id, entry] of Object.entries(raw)) {
-        // Support old format (string) and new format ({url, _cachedAt})
-        if (typeof entry === 'string') continue; // old format, re-fetch
-        if (entry._cachedAt && (now - entry._cachedAt) > HD_THUMB_TTL) continue;
+        if (typeof entry === 'string') { changed = true; continue; }
+        if (entry._cachedAt && (now - entry._cachedAt) > HD_THUMB_TTL) { changed = true; continue; }
         filtered[id] = entry;
       }
+      if (changed) saveCacheAsync(HD_THUMB_CACHE_FILE, filtered);
       return filtered;
     }
   } catch (e) { console.error('HD thumb cache read error:', e.message); }
@@ -92,9 +112,9 @@ let hdThumbCache = loadHdThumbCache();
 
 const AD_METRICS = [
   'impressions', 'clicks', 'spend', 'reach',
-  'ctr', 'cpc', 'cpm', 'cpp',
-  'actions', 'action_values', 'cost_per_action_type',
-  'purchase_roas', 'frequency',
+  'ctr', 'cpc', 'cpm',
+  'actions', 'action_values',
+  'frequency',
   'unique_clicks', 'unique_ctr',
 ].join(',');
 
@@ -202,9 +222,7 @@ function groupByAdName(rows) {
     entry.thumbnail_url = topAd?.thumbnail_url
       || _rows.find(r => r.thumbnail_url)?.thumbnail_url
       || null;
-    entry.image_url = topAd?.image_url
-      || _rows.find(r => r.image_url)?.image_url
-      || null;
+    entry.is_catalog = !!topAd?.is_catalog;
 
     const sum = fn => _rows.reduce((s, r) => s + fn(r), 0);
     for (const f of ['impressions', 'clicks', 'spend', 'reach', 'unique_clicks', 'frequency']) {
@@ -215,9 +233,9 @@ function groupByAdName(rows) {
     entry.cpm = entry.impressions ? (entry.spend  / entry.impressions * 1000).toFixed(2) : '0';
     entry.purchase_count = sum(r => parseFloat(findPurchaseAction(r.actions)?.value       || 0));
     entry.purchase_value = sum(r => parseFloat(findPurchaseAction(r.action_values)?.value || 0));
-    entry.purchase_roas  = entry.spend > 0 && entry.purchase_value > 0
-      ? [{ value: (entry.purchase_value / entry.spend).toFixed(4) }]
-      : null;
+    entry.roas = entry.spend > 0 && entry.purchase_value > 0 ? entry.purchase_value / entry.spend : 0;
+    entry.cpr  = entry.purchase_count > 0 ? entry.spend / entry.purchase_count : 0;
+    entry.aov  = entry.purchase_count > 0 ? entry.purchase_value / entry.purchase_count : 0;
     return entry;
   });
 }
@@ -274,7 +292,7 @@ app.get('/api/dashboard', async (req, res) => {
 
   try {
     // 1. Fetch insights
-    const cacheKey = `${days}`;
+    const cacheKey = String(days);
     const ic = insightsCache[cacheKey];
     let currRows, prevRows;
     if (!forceRefresh && ic) {
@@ -291,39 +309,52 @@ app.get('/api/dashboard', async (req, res) => {
         fetchInsightsAsync(base, token, fields, current, (s, p) => { pollStatus[0] = p; reportProgress(); }),
         fetchInsightsAsync(base, token, fields, prev, (s, p) => { pollStatus[1] = p; reportProgress(); }),
       ]);
-      insightsCache[cacheKey] = { current: currRows, previous: prevRows };
-      saveInsightsCacheToFile(insightsCache);
+      insightsCache = { [cacheKey]: { current: currRows, previous: prevRows } };
+      saveCacheAsync(INSIGHTS_CACHE_FILE, insightsCache);
       progress(`Insights loaded: ${currRows.length} current + ${prevRows.length} previous rows [${elapsed()}]`);
     }
 
     // 2. Collect unique ad_ids, fetch only missing creative info
     const allAdIds = [...new Set([...currRows, ...prevRows].map(r => r.ad_id).filter(Boolean))];
 
-    const missingIds = allAdIds.filter(id => !allAdsCache.data[id]);
+    const missingIds = allAdIds.filter(id => !creativeCache[id]);
     if (missingIds.length > 0) {
       progress(`Fetching creative info for ${missingIds.length} new ads... [${elapsed()}]`);
-      const fetched = await fetchAdsByIds(token, missingIds, 'id,creative{id,name,thumbnail_url,image_url,object_type,asset_feed_spec,object_story_spec}');
+      const fetched = await fetchAdsByIds(token, missingIds, 'id,creative{id,name,object_type,asset_feed_spec,object_story_spec}');
+      // Extract primary_text before slimming
+      const ptMap = buildPrimaryTextMap(fetched);
       const now = Date.now();
       for (const ad of fetched) {
-        allAdsCache.data[ad.id] = { ...ad, _cachedAt: now };
+        if (ad.creative?.id && ptMap[ad.creative.id]) {
+          ad.creative.primary_text = ptMap[ad.creative.id];
+        }
+        creativeCache[ad.id] = slimCreative({ ...ad, _cachedAt: now });
       }
       for (const id of missingIds) {
-        if (!allAdsCache.data[id]) allAdsCache.data[id] = { id, creative: null, _cachedAt: now };
+        if (!creativeCache[id]) creativeCache[id] = { id, creative: null, _cachedAt: now };
       }
-      saveCacheToFile(allAdsCache.data);
+      saveCacheAsync(CACHE_FILE, creativeCache);
       progress(`Creative info cached (${fetched.length} ads) [${elapsed()}]`);
     } else {
       progress(`All ${allAdIds.length} ads already cached [${elapsed()}]`);
     }
-    const allAds = allAdIds.map(id => allAdsCache.data[id]).filter(Boolean);
+    const allAds = allAdIds.map(id => creativeCache[id]).filter(Boolean);
+
+    // Prune: remove entries not in active ads
+    const activeAdIdSet = new Set(allAdIds);
+    let pruned = false;
+    for (const id of Object.keys(creativeCache)) {
+      if (!activeAdIdSet.has(id)) { delete creativeCache[id]; pruned = true; }
+    }
+    if (pruned) saveCacheAsync(CACHE_FILE, creativeCache);
 
     // Fetch HD thumbnails by creative ID directly (thumbnail_width only works at creative level)
-    // Skip catalog/DPA ads (object_story_spec.template_data) - they only have placeholder images
+    // Skip catalog/DPA ads - they only have placeholder images
     const creativeInfoMap = {};
     for (const ad of allAds) {
       if (ad.creative?.id) creativeInfoMap[ad.creative.id] = {
         type: ad.creative.object_type,
-        isCatalog: !!ad.creative.object_story_spec?.template_data,
+        isCatalog: !!ad.creative.is_catalog,
       };
     }
     const nonCatalogCreativeIds = Object.keys(creativeInfoMap).filter(cid => {
@@ -353,43 +384,38 @@ app.get('/api/dashboard', async (req, res) => {
     } else if (nonCatalogCreativeIds.length > 0) {
       progress(`All ${nonCatalogCreativeIds.length} HD thumbnails cached [${elapsed()}]`);
     }
+    // Prune HD thumb entries not in active creatives
+    const activeCreativeIds = new Set(Object.keys(creativeInfoMap));
+    let hdPruned = false;
+    for (const id of Object.keys(hdThumbCache)) {
+      if (!activeCreativeIds.has(id)) { delete hdThumbCache[id]; hdPruned = true; }
+    }
+    if (hdPruned) saveCacheAsync(HD_THUMB_CACHE_FILE, hdThumbCache);
     // Extract URLs from cache entries
     const hdThumbMap = {};
     for (const [id, entry] of Object.entries(hdThumbCache)) {
-      hdThumbMap[id] = typeof entry === 'string' ? entry : entry.url;
+      hdThumbMap[id] = entry.url;
     }
 
-    // Build maps from allAds
-    const thumbMap = Object.fromEntries(
-      allAds.filter(ad => ad.creative?.thumbnail_url || ad.creative?.image_url)
-        .map(ad => {
-          const c = ad.creative;
-          const isCatalog = !c.object_type || !['SHARE', 'VIDEO'].includes(c.object_type) || !!c.object_story_spec?.template_data;
-          const hdUrl = hdThumbMap[c.id] || null;
-          return [ad.id, {
-            thumb: c.thumbnail_url || c.image_url,
-            full:  isCatalog ? null : (hdUrl || c.image_url || null),
-          }];
-        })
-    );
-    const primaryTextMap = buildPrimaryTextMap(allAds);
-    const creativeMap = Object.fromEntries(
-      allAds.filter(ad => ad.creative).map(ad => {
-        const c = ad.creative;
-        const isCatalog = !c.object_type || !['SHARE', 'VIDEO'].includes(c.object_type) || !!c.object_story_spec?.template_data;
-        const hdUrl = hdThumbMap[c.id] || null;
-        return [ad.id, {
-          ...c,
-          primary_text: primaryTextMap[c.id] || '',
-          image_url: isCatalog ? null : (hdUrl || c.image_url || null),
-        }];
-      })
-    );
+    // Build creative map from allAds — HD thumb is single source for all image URLs
+    const creativeMap = {};
+    for (const ad of allAds) {
+      const c = ad.creative;
+      if (!c) continue;
+      creativeMap[ad.id] = {
+        id:           c.id,
+        name:         c.name || '',
+        object_type:  c.object_type || '',
+        primary_text: c.primary_text || '',
+        is_catalog:   !!c.is_catalog,
+        thumbnail_url: hdThumbMap[c.id] || null,
+      };
+    }
 
-    // Ads: attach thumbnail (small) + image_url (full size for preview)
+    // Ads: attach thumbnail + is_catalog
     const attachThumb = rows => rows.map(r => {
-      const t = thumbMap[r.ad_id];
-      return { ...r, thumbnail_url: t?.thumb || null, image_url: t?.full || null };
+      const cm = creativeMap[r.ad_id];
+      return { ...r, thumbnail_url: cm?.thumbnail_url || null, is_catalog: !!cm?.is_catalog };
     });
 
     // Creatives: attach creative details
@@ -404,8 +430,8 @@ app.get('/api/dashboard', async (req, res) => {
             creative_id:   id,
             primary_text:  row.creative?.primary_text || '',
             format:        row.creative ? (fmtMap[row.creative.object_type] || 'Image') : null,
-            thumbnail_url: row.creative?.thumbnail_url || row.creative?.image_url || null,
-            image_url:     row.creative?.image_url || null,
+            thumbnail_url: row.creative?.thumbnail_url || null,
+            is_catalog:    !!row.creative?.is_catalog,
             ad_name:       row.ad_name || '',
             _rows:         [],
           };
@@ -422,7 +448,9 @@ app.get('/api/dashboard', async (req, res) => {
         entry.cpm = entry.impressions ? (entry.spend  / entry.impressions * 1000).toFixed(2) : '0';
         entry.purchase_count = sum(r => parseFloat(findPurchaseAction(r.actions)?.value       || 0));
         entry.purchase_value = sum(r => parseFloat(findPurchaseAction(r.action_values)?.value || 0));
-        entry.purchase_roas  = _rows.find(r => r.purchase_roas)?.purchase_roas || null;
+        entry.roas = entry.spend > 0 && entry.purchase_value > 0 ? entry.purchase_value / entry.spend : 0;
+        entry.cpr  = entry.purchase_count > 0 ? entry.spend / entry.purchase_count : 0;
+        entry.aov  = entry.purchase_count > 0 ? entry.purchase_value / entry.purchase_count : 0;
         return entry;
       });
     };
@@ -478,39 +506,39 @@ app.post('/api/chat', async (req, res) => {
   const apiKey = req.headers['x-claude-key'] || process.env.ANTHROPIC_API_KEY;
   if (!apiKey) return res.status(400).json({ error: 'Missing ANTHROPIC_API_KEY' });
 
-    res.setHeader('Content-Type', 'text/event-stream');
-    res.setHeader('Cache-Control', 'no-cache');
-    res.setHeader('Connection', 'keep-alive');
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
 
-    const maxRetries = 3;
-    for (let attempt = 0; attempt < maxRetries; attempt++) {
-      try {
-        const stream = await new Anthropic({ apiKey }).messages.stream({
-          model:      'claude-sonnet-4-5-20250929',
-          max_tokens: 2048,
-          system:     systemPrompt,
-          messages:   messages.map(({ role, content }) => ({ role, content })),
-        });
+  const maxRetries = 3;
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      const stream = await new Anthropic({ apiKey }).messages.stream({
+        model:      'claude-sonnet-4-5-20250929',
+        max_tokens: 2048,
+        system:     systemPrompt,
+        messages:   messages.map(({ role, content }) => ({ role, content })),
+      });
 
-        for await (const chunk of stream) {
-          if (chunk.type === 'content_block_delta' && chunk.delta?.type === 'text_delta') {
-            res.write(`data: ${JSON.stringify({ text: chunk.delta.text })}\n\n`);
-          }
+      for await (const chunk of stream) {
+        if (chunk.type === 'content_block_delta' && chunk.delta?.type === 'text_delta') {
+          res.write(`data: ${JSON.stringify({ text: chunk.delta.text })}\n\n`);
         }
-        res.write('data: [DONE]\n\n');
-        res.end();
-        return;
-      } catch (err) {
-        if (err.status === 529 && attempt < maxRetries - 1) {
-          await new Promise(r => setTimeout(r, 2000 * (attempt + 1)));
-          continue;
-        }
-        res.write(`data: ${JSON.stringify({ error: err.message })}\n\n`);
-        res.end();
-        return;
       }
+      res.write('data: [DONE]\n\n');
+      res.end();
+      return;
+    } catch (err) {
+      if (err.status === 529 && attempt < maxRetries - 1) {
+        await new Promise(r => setTimeout(r, 2000 * (attempt + 1)));
+        continue;
+      }
+      res.write(`data: ${JSON.stringify({ error: err.message })}\n\n`);
+      res.end();
+      return;
     }
-    res.end();
+  }
+  res.end();
 });
 
 // ── System prompt ─────────────────────────────────────────────────────────────
@@ -532,10 +560,10 @@ Hãy:
   const ps = period?.previous?.since || '';
   const pu = period?.previous?.until || '';
 
-  // Strip thumbnail_url and filter spend > $10 to save tokens
+  // Strip image URLs and internal fields, filter spend > $10 to save tokens
   const slim = arr => (arr || [])
     .filter(r => parseFloat(r.spend || 0) > 10)
-    .map(({ thumbnail_url, image_url, ...rest }) => rest);
+    .map(({ thumbnail_url, is_catalog, ...rest }) => rest);
 
   if (ads?.current?.length)        parts.push(`\n## ADs hiện tại (${cs} → ${cu}):\n${JSON.stringify(slim(ads.current))}`);
   if (ads?.previous?.length)       parts.push(`\n## ADs kỳ trước (${ps} → ${pu}):\n${JSON.stringify(slim(ads.previous))}`);

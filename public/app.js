@@ -23,6 +23,7 @@ const state = {
   sort: { ads: { key: 'spend', dir: 1 }, creatives: { key: 'spend', dir: 1 } },
   filters: { ads: {}, creatives: {} },
   pageLimit: { ads: PAGE_SIZE, creatives: PAGE_SIZE },
+  _lastChatCtx: '',
 };
 
 // Table config
@@ -41,7 +42,7 @@ const TABLES = {
       { key: 'ctr', type: 'metric' },
       { key: 'cpc', type: 'metric' },
     ],
-    row: (r, p) => `<tr><td>${thumb(r.thumbnail_url, r.image_url)}</td><td class="td-name" title="${esc(r.ad_name)}">${esc(r.ad_name)}</td>${metrics(r, p)}</tr>`
+    row: (r, p) => `<tr><td>${thumb(r.thumbnail_url, r.is_catalog)}</td><td class="td-name" title="${esc(r.ad_name)}">${esc(r.ad_name)}</td>${metrics(r, p)}</tr>`
   },
   creatives: {
     cols: 11, idKey: 'creative_id', searchCols: [1, 2, 3],
@@ -60,7 +61,7 @@ const TABLES = {
     ],
     row: (r, p) => {
       const f = r.format?.toLowerCase();
-      return `<tr><td>${thumb(r.thumbnail_url, r.image_url)}</td><td class="td-name" title="${esc(r.primary_text)}">${esc(r.primary_text)}</td><td>${f ? `<span class="fmt-badge ${f}">${esc(r.format)}</span>` : ''}</td><td class="td-name" title="${esc(r.ad_name)}">${esc(r.ad_name)}</td>${metrics(r, p)}</tr>`;
+      return `<tr><td>${thumb(r.thumbnail_url, r.is_catalog)}</td><td class="td-name" title="${esc(r.primary_text)}">${esc(r.primary_text)}</td><td>${f ? `<span class="fmt-badge ${f}">${esc(r.format)}</span>` : ''}</td><td class="td-name" title="${esc(r.ad_name)}">${esc(r.ad_name)}</td>${metrics(r, p)}</tr>`;
     }
   }
 };
@@ -102,7 +103,6 @@ window.addEventListener('DOMContentLoaded', async () => {
   }
 });
 
-
 function updateStatus() {
   const ok = !!(state.config.metaToken && state.config.accountId);
   $('apiStatus').className = 'status-dot ' + (ok ? 'ok' : 'err');
@@ -123,6 +123,7 @@ function showPage(name) {
   $('page-' + name).classList.add('active');
   const nav = [...$$('.nav-item')].find(n => n.getAttribute('onclick')?.includes(`'${name}'`));
   if (nav) nav.classList.add('active');
+  hideThumbPreview();
 }
 
 // Fetch
@@ -201,11 +202,7 @@ async function fetchAll(refresh = true) {
 
 // Data helpers
 function enrichRow(row) {
-  const findAction = (arr, type) => (arr || []).find(x => x.action_type === type || x.action_type === 'omni_' + type);
-  const pc = row.purchase_count ?? parseFloat(findAction(row.actions, 'purchase')?.value || 0);
-  const pv = row.purchase_value ?? parseFloat(findAction(row.action_values, 'purchase')?.value || 0);
-  const roas = row.purchase_roas ? parseFloat(Array.isArray(row.purchase_roas) ? (row.purchase_roas[0]?.value || 0) : row.purchase_roas) : 0;
-  return { ...row, roas, cpr: pc ? parseFloat(row.spend || 0) / pc : 0, aov: pc && pv ? pv / pc : 0 };
+  return { ...row, roas: parseFloat(row.roas || 0), cpr: parseFloat(row.cpr || 0), aov: parseFloat(row.aov || 0) };
 }
 
 // Render
@@ -428,10 +425,16 @@ const esc = s => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').repl
 const fmtF = n => parseFloat(n || 0).toFixed(2);
 const fmtMoney = n => '$' + parseFloat(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-function thumb(url, fullUrl) {
-  if (!url) return `<div class="thumb-placeholder"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg></div>`;
-  const hasFullSize = fullUrl && fullUrl !== url;
-  return `<img class="thumb" src="${esc(url)}"${hasFullSize ? ` data-full="${esc(fullUrl)}" onmouseenter="showThumbPreview(event)" onmouseleave="hideThumbPreview()" onclick="event.stopPropagation()"` : ''} alt="" loading="lazy">`;
+function thumb(url, isCatalog) {
+  const placeholder = `<div class="thumb-placeholder"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg></div>`;
+  if (!url) return placeholder;
+  return `<img class="thumb" src="${esc(url)}"${isCatalog ? '' : ` onmouseenter="showThumbPreview(event)" onmouseleave="hideThumbPreview()" onclick="event.stopPropagation()"`} alt="" loading="lazy" onerror="thumbError(this)">`;
+}
+function thumbError(img) {
+  const div = document.createElement('div');
+  div.className = 'thumb-placeholder';
+  div.innerHTML = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg>';
+  img.replaceWith(div);
 }
 
 const _thumbPreview = (() => {
@@ -443,15 +446,8 @@ const _thumbPreview = (() => {
 })();
 
 function showThumbPreview(e) {
-  const src = e.target.dataset.full || e.target.src;
-  _thumbPreview.onload = function() {
-    // Hide if Meta returns a tiny placeholder image
-    if (_thumbPreview.naturalWidth < 100 || _thumbPreview.naturalHeight < 100) {
-      _thumbPreview.style.display = 'none';
-      return;
-    }
-    _thumbPreview.style.display = 'block';
-  };
+  const src = e.target.src;
+  _thumbPreview.onload = function() { _thumbPreview.style.display = 'block'; };
   _thumbPreview.src = src;
   const rect = e.target.getBoundingClientRect();
   let top = rect.top + rect.height / 2 - 120;
@@ -506,9 +502,14 @@ async function sendMessage() {
   container.appendChild(typingEl);
   scrollChat();
 
+  const cachedAt = state.ads.cached_at || state.creatives.cached_at || '';
+  const dataChanged = cachedAt !== state._lastChatCtx;
   const context = {};
-  if (state.ads.current.length) { context.ads = state.ads; context.period = state.ads.period; }
-  if (state.creatives.current.length) { context.creatives = state.creatives; }
+  if (dataChanged) {
+    if (state.ads.current.length) { context.ads = state.ads; context.period = state.ads.period; }
+    if (state.creatives.current.length) { context.creatives = state.creatives; }
+    state._lastChatCtx = cachedAt;
+  }
 
   try {
     const res = await fetch('/api/chat', {
