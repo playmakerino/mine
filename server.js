@@ -314,12 +314,14 @@ app.get('/api/dashboard', async (req, res) => {
       progress(`Insights loaded: ${currRows.length} current + ${prevRows.length} previous rows [${elapsed()}]`);
     }
 
-    // 2. Collect unique ad_ids, fetch only missing creative info
-    const allAdIds = [...new Set([...currRows, ...prevRows].map(r => r.ad_id).filter(Boolean))];
+    // 2. Collect unique ad_ids (spend > $10), fetch only missing creative info
+    const adSpendMap = {};
+    for (const r of currRows) { if (r.ad_id) adSpendMap[r.ad_id] = parseFloat(r.spend) || 0; }
+    const allAdIds = [...new Set([...currRows, ...prevRows].map(r => r.ad_id).filter(id => id && (adSpendMap[id] || 0) > 10))];
 
     const missingIds = allAdIds.filter(id => !creativeCache[id]);
     if (missingIds.length > 0) {
-      progress(`Fetching creative info for ${missingIds.length} new ads... [${elapsed()}]`);
+      progress(`Fetching creative info for ${missingIds.length} new ads (spend > $10)... [${elapsed()}]`);
       const fetched = await fetchAdsByIds(token, missingIds, 'id,creative{id,name,object_type,asset_feed_spec,object_story_spec}');
       // Extract primary_text before slimming
       const ptMap = buildPrimaryTextMap(fetched);
@@ -336,7 +338,7 @@ app.get('/api/dashboard', async (req, res) => {
       saveCacheAsync(CACHE_FILE, creativeCache);
       progress(`Creative info cached (${fetched.length} ads) [${elapsed()}]`);
     } else {
-      progress(`All ${allAdIds.length} ads already cached [${elapsed()}]`);
+      progress(`All ${allAdIds.length} ads already cached (spend > $10) [${elapsed()}]`);
     }
     const allAds = allAdIds.map(id => creativeCache[id]).filter(Boolean);
 
@@ -349,29 +351,22 @@ app.get('/api/dashboard', async (req, res) => {
     if (pruned) saveCacheAsync(CACHE_FILE, creativeCache);
 
     // Fetch HD thumbnails by creative ID directly (thumbnail_width only works at creative level)
-    // Skip catalog/DPA ads and low-spend creatives (< $10)
-    const adSpendMap = {};
-    for (const r of currRows) { if (r.ad_id) adSpendMap[r.ad_id] = parseFloat(r.spend) || 0; }
+    // Skip catalog/DPA ads - they only have placeholder images
     const creativeInfoMap = {};
     for (const ad of allAds) {
-      if (ad.creative?.id) {
-        const cid = ad.creative.id;
-        const existing = creativeInfoMap[cid];
-        creativeInfoMap[cid] = {
-          type: ad.creative.object_type,
-          isCatalog: !!ad.creative.is_catalog,
-          hasSpend: (existing?.hasSpend) || (adSpendMap[ad.id] || 0) > 10,
-        };
-      }
+      if (ad.creative?.id) creativeInfoMap[ad.creative.id] = {
+        type: ad.creative.object_type,
+        isCatalog: !!ad.creative.is_catalog,
+      };
     }
     const nonCatalogCreativeIds = Object.keys(creativeInfoMap).filter(cid => {
       const info = creativeInfoMap[cid];
-      return info.type && ['SHARE', 'VIDEO'].includes(info.type) && !info.isCatalog && info.hasSpend;
+      return info.type && ['SHARE', 'VIDEO'].includes(info.type) && !info.isCatalog;
     });
     // Use cached HD thumbs, only fetch missing ones
     const missingHdIds = nonCatalogCreativeIds.filter(cid => !hdThumbCache[cid]);
     if (missingHdIds.length > 0) {
-      progress(`Fetching HD thumbnails for ${missingHdIds.length}/${nonCatalogCreativeIds.length} creatives (spend > $10)... [${elapsed()}]`);
+      progress(`Fetching HD thumbnails for ${missingHdIds.length} new creatives... [${elapsed()}]`);
       const BATCH = 50;
       for (let i = 0; i < missingHdIds.length; i += BATCH) {
         const batch = missingHdIds.slice(i, i + BATCH);
@@ -387,9 +382,9 @@ app.get('/api/dashboard', async (req, res) => {
         }
       }
       saveCacheAsync(HD_THUMB_CACHE_FILE, hdThumbCache);
-      progress(`Fetched HD thumbnails for ${missingHdIds.length} creatives (spend > $10) [${elapsed()}]`);
+      progress(`Fetched HD thumbnails for ${missingHdIds.length} creatives [${elapsed()}]`);
     } else if (nonCatalogCreativeIds.length > 0) {
-      progress(`All ${nonCatalogCreativeIds.length} HD thumbnails cached (spend > $10) [${elapsed()}]`);
+      progress(`All ${nonCatalogCreativeIds.length} HD thumbnails cached [${elapsed()}]`);
     }
     // Prune HD thumb entries not in active creatives
     const activeCreativeIds = new Set(Object.keys(creativeInfoMap));
